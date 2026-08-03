@@ -1,0 +1,2250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>操盘手交易日志 · Trading Journal</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --bg:#0e1117; --bg2:#161b22; --bg3:#1c2330; --card:#161b22;
+    --border:#2a313c; --txt:#e6edf3; --txt2:#9aa6b2; --txt3:#6e7681;
+    --green:#3fb950; --greenbg:rgba(63,185,80,.12);
+    --red:#f85149; --redbg:rgba(248,81,73,.12);
+    --yellow:#d29922; --yellowbg:rgba(210,153,34,.12);
+    --blue:#58a6ff; --bluebg:rgba(88,166,255,.12);
+    --purple:#bc8cff;
+    --radius:10px; --shadow:0 6px 24px rgba(0,0,0,.35);
+    --mono:'SF Mono','Menlo','Consolas',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    background:var(--bg);color:var(--txt);font-size:14px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* layout */
+  .app{display:flex;min-height:100vh}
+  .sidebar{
+    width:230px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);
+    padding:18px 0;display:flex;flex-direction:column;position:fixed;height:100vh;
+  }
+  .logo{padding:0 20px 18px;border-bottom:1px solid var(--border);margin-bottom:10px}
+  .logo .t{font-size:16px;font-weight:700;letter-spacing:.5px}
+  .logo .s{font-size:11px;color:var(--txt3);margin-top:2px;font-family:var(--mono)}
+  .nav a{
+    display:flex;align-items:center;gap:10px;padding:10px 20px;color:var(--txt2);
+    cursor:pointer;text-decoration:none;font-size:13.5px;border-left:2px solid transparent;transition:.15s;
+  }
+  .nav a:hover{background:var(--bg3);color:var(--txt)}
+  .nav a.active{background:var(--bg3);color:var(--blue);border-left-color:var(--blue)}
+  .nav a .ic{width:16px;text-align:center;font-size:14px}
+  .sidebar .foot{margin-top:auto;padding:14px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--txt3)}
+  .main{margin-left:230px;flex:1;padding:26px 34px;max-width:100%;min-width:0}
+  .page{display:none}.page.active{display:block}
+  .page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+  .page-head h1{font-size:20px;font-weight:700}
+  .page-head .sub{color:var(--txt2);font-size:13px;margin-top:3px}
+  /* buttons */
+  .btn{background:var(--bg3);color:var(--txt);border:1px solid var(--border);padding:8px 14px;border-radius:7px;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:6px;transition:.15s;font-family:inherit}
+  .btn:hover{background:#222a36;border-color:#3a4250}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#041020;font-weight:600}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.danger{background:transparent;border-color:var(--red);color:var(--red)}
+  .btn.sm{padding:5px 10px;font-size:12px}
+  /* cards */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
+  .grid{display:grid;gap:16px}
+  .stat-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+  .stat .lbl{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px}
+  .stat .val{font-size:24px;font-weight:700;margin-top:6px;font-family:var(--mono)}
+  .stat .val.green{color:var(--green)}.stat .val.red{color:var(--red)}.stat .val.blue{color:var(--blue)}
+  .stat .sub{font-size:11px;color:var(--txt2);margin-top:3px}
+  /* form */
+  .form-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:22px}
+  .section-title{font-size:13px;font-weight:700;color:var(--blue);margin-bottom:14px;letter-spacing:.5px;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+  .section-title::before{content:"";width:3px;height:14px;background:var(--blue);border-radius:2px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:6px;font-weight:500}
+  .field label .req{color:var(--red)}
+  .field label .hint{color:var(--txt3);font-weight:400;margin-left:6px;font-size:11px}
+  .field input,.field select,.field textarea{
+    width:100%;background:var(--bg);border:1px solid var(--border);color:var(--txt);
+    padding:8px 11px;border-radius:7px;font-size:13px;font-family:inherit;transition:.15s;
+  }
+  .field textarea{resize:vertical;min-height:70px;line-height:1.5}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--bluebg)}
+  /* 日期输入框：替换原生图标为自定义 SVG 日历图标 */
+  input[type="date"],input[type="datetime-local"]{
+    color-scheme:dark;
+    -webkit-appearance:none;
+    min-height:36px;padding-right:32px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Crect x='1.5' y='3' width='13' height='11.5' rx='1.5' stroke='%239aa6b2' stroke-width='1.2'/%3E%3Cpath d='M1.5 6.5h13' stroke='%239aa6b2' stroke-width='1.2'/%3E%3Cpath d='M4.5 1v3M11.5 1v3' stroke='%239aa6b2' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 10px center;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator{
+    opacity:0;width:24px;height:24px;cursor:pointer;position:absolute;right:6px
+  }
+  input[type="date"]:hover,input[type="datetime-local"]:hover{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Crect x='1.5' y='3' width='13' height='11.5' rx='1.5' stroke='%23e6edf3' stroke-width='1.2'/%3E%3Cpath d='M1.5 6.5h13' stroke='%23e6edf3' stroke-width='1.2'/%3E%3Cpath d='M4.5 1v3M11.5 1v3' stroke='%23e6edf3' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E")}
+  .field{position:relative}
+  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+  .row .field{margin-bottom:0}
+  .help{font-size:11px;color:var(--txt3);margin-top:4px}
+  /* tags input */
+  .tagbox{display:flex;flex-wrap:wrap;gap:6px;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:7px;min-height:36px;align-items:center}
+  .tag{background:var(--bluebg);color:var(--blue);padding:3px 8px;border-radius:5px;font-size:11px;display:flex;gap:5px;align-items:center}
+  .tag .x{cursor:pointer;opacity:.6}.tag .x:hover{opacity:1}
+  .tagbox input{background:transparent;border:none;color:var(--txt);outline:none;font-size:12px;flex:1;min-width:80px;padding:4px;font-family:inherit}
+  /* rating */
+  .rating{display:flex;gap:4px}
+  .rating .dot{width:30px;height:30px;border:1px solid var(--border);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--txt2);transition:.15s}
+  .rating .dot:hover{border-color:var(--blue)}
+  .rating .dot.on{background:var(--blue);color:#041020;border-color:var(--blue);font-weight:700}
+  /* table */
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);font-size:13px}
+  th{color:var(--txt3);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  tr.clickable{cursor:pointer}.tr.clickable:hover,tr:hover{background:var(--bg3)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+  .pill.long{background:var(--greenbg);color:var(--green)}
+  .pill.short{background:var(--redbg);color:var(--red)}
+  .pill.win{background:var(--greenbg);color:var(--green)}
+  .pill.loss{background:var(--redbg);color:var(--red)}
+  .pill.be{background:var(--yellowbg);color:var(--yellow)}
+  .grade{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;font-weight:700;font-size:14px}
+  .grade.A{background:var(--greenbg);color:var(--green);border:1px solid var(--green)}
+  .grade.B{background:var(--bluebg);color:var(--blue);border:1px solid var(--blue)}
+  .grade.C{background:var(--yellowbg);color:var(--yellow);border:1px solid var(--yellow)}
+  .grade.D{background:var(--redbg);color:var(--red);border:1px solid var(--red)}
+  .empty{padding:50px 20px;text-align:center;color:var(--txt3)}
+  .empty .big{font-size:42px;margin-bottom:10px;opacity:.4}
+  /* detail view */
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.detail-grid{grid-template-columns:1fr}.sidebar{position:relative;width:100%;height:auto}.main{margin-left:0}.app{display:block}.target-row .row{grid-template-columns:1fr}.target-row .row .field{min-width:100%}}
+  .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .kv:last-child{border:none}.kv .k{color:var(--txt2)}.kv .v{font-weight:600;font-family:var(--mono)}
+  .block{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px}
+  .block .bt{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+  .block .bb{font-size:13px;white-space:pre-wrap;line-height:1.6}
+  /* evaluation */
+  .eval-box{background:linear-gradient(135deg,var(--bg3),var(--card));border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+  .eval-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+  .eval-head .g{font-size:36px}
+  .eval-head .info .t{font-size:16px;font-weight:700}.eval-head .info .s{font-size:12px;color:var(--txt2);margin-top:2px}
+  .meter{margin-bottom:12px}
+  .meter .top{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}
+  .meter .top .l{color:var(--txt2)}.meter .top .v{font-weight:600;font-family:var(--mono)}
+  .meter .bar{height:6px;background:var(--bg);border-radius:3px;overflow:hidden}
+  .meter .fill{height:100%;border-radius:3px;transition:width .4s}
+  .feedback{background:var(--bg);border-left:3px solid var(--blue);padding:12px 14px;border-radius:0 8px 8px 0;font-size:13px;line-height:1.7}
+  .feedback ul{margin:6px 0 0 18px}.feedback li{margin-bottom:4px}
+  .feedback.good{border-left-color:var(--green)}
+  .feedback.warn{border-left-color:var(--yellow)}
+  .feedback.bad{border-left-color:var(--red)}
+  .tag-list{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+  .tag-list .t{background:var(--bg3);color:var(--txt2);padding:2px 8px;border-radius:4px;font-size:11px}
+  /* guide */
+  .guide-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:14px}
+  .guide-card h3{font-size:15px;margin-bottom:10px;color:var(--txt);display:flex;align-items:center;gap:8px}
+  .guide-card h3 .n{background:var(--blue);color:#041020;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+  .guide-card p{color:var(--txt2);font-size:13.5px;line-height:1.7;margin-bottom:8px}
+  .guide-card ul{margin:6px 0 10px 20px;color:var(--txt2);font-size:13px;line-height:1.8}
+  .guide-card code{background:var(--bg);padding:2px 6px;border-radius:4px;font-family:var(--mono);font-size:12px;color:var(--green)}
+  .callout{background:var(--bluebg);border:1px solid rgba(88,166,255,.3);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--blue);margin:10px 0}
+  .callout.warn{background:var(--yellowbg);border-color:rgba(210,153,34,.3);color:var(--yellow)}
+  .callout.bad{background:var(--redbg);border-color:rgba(248,81,73,.3);color:var(--red)}
+  /* 实时测算网格 */
+  .calc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin-top:8px}
+  .calc-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+  .calc-card .cl{font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;line-height:1.3;min-height:13px}
+  .calc-card .cv{font-size:15px;font-weight:700;font-family:var(--mono);margin-top:3px;line-height:1.2}
+  .calc-card.hi{border-color:var(--blue);background:var(--bluebg)}
+  .calc-card.hi .cv{color:var(--blue)}
+  .calc-hint{font-size:12.5px;color:var(--txt3);line-height:1.6}
+  .calc-warn{margin-top:8px;font-size:12px;line-height:1.6}
+  .calc-warn div{padding:2px 0}
+  .calc-warn .w-red{color:var(--red)}.calc-warn .w-yel{color:var(--yellow)}
+  /* 开仓必看清单 */
+  .chk-group{background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px}
+  .chk-gtitle{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .chk-gtitle .cnt{font-size:11px;color:var(--txt3);font-weight:400}
+  .chk-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;margin-bottom:7px}
+  .chk-item.edit{background:var(--bg);outline:2px solid var(--yellow);outline-offset:-1px}
+  .chk-idx{flex-shrink:0;width:22px;height:22px;border-radius:50%;color:#041020;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+  .chk-txt{flex:1;font-size:13.5px;line-height:1.65;color:var(--txt);word-break:break-word}
+  .chk-edit{flex:1;background:var(--bg);border:1px solid var(--yellow);color:var(--txt);padding:8px 10px;border-radius:7px;font-size:13px;font-family:inherit;min-height:58px;line-height:1.5;resize:vertical}
+  .chk-edit:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--bluebg)}
+  .chk-acts{display:flex;gap:5px;flex-shrink:0}
+  /* 止盈目标 */
+  .target-row{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px}
+  .target-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .target-idx{font-size:12px;font-weight:600;color:var(--txt2)}
+  .target-del{background:none;border:none;color:var(--txt3);cursor:pointer;font-size:11px;padding:2px 0;transition:color .15s}
+  .target-del:hover{color:var(--red)}
+  .target-check{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--txt2);cursor:pointer;user-select:none}
+  .target-check input{accent-color:var(--green);width:14px;height:14px;cursor:pointer}
+  .target-sum{font-size:11px;padding:2px 0;margin-top:2px}
+  .target-sum.ok{color:var(--green)}.target-sum.warn{color:var(--yellow)}
+  /* 震荡幅度计算器 */
+  .swing-tbl{width:100%;font-size:12.5px;margin-top:8px}
+  .swing-tbl th,.swing-tbl td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:left}
+  .swing-tbl th{color:var(--txt3);font-size:11px;text-transform:uppercase}
+  .swing-tbl td.num{font-family:var(--mono);font-weight:600}
+  .swing-row.long{color:var(--green)}.swing-row.short{color:var(--red)}.swing-row.now{color:var(--txt)}
+  .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+  .filters select,.filters input{background:var(--bg2);border:1px solid var(--border);color:var(--txt);padding:7px 10px;border-radius:7px;font-size:12px;font-family:inherit}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);color:var(--txt);padding:10px 18px;border-radius:8px;font-size:13px;box-shadow:var(--shadow);z-index:999;opacity:0;transition:.3s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+  .badge{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--bg3);color:var(--txt2);margin-left:6px}
+  .scroll-x{overflow-x:auto}
+  .score-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+  @media(max-width:760px){.score-grid{grid-template-columns:1fr}}
+  .num{font-family:var(--mono)}
+  hr.sep{border:none;border-top:1px solid var(--border);margin:18px 0}
+  a.link{color:var(--blue);cursor:pointer;text-decoration:none}.link:hover{text-decoration:underline}
+  /* indicators reference */
+  .ind-cat{font-size:16px;font-weight:700;margin:24px 0 12px;color:var(--txt);display:flex;align-items:center;gap:10px}
+  .ind-cat:first-child{margin-top:0}
+  .ind-cat .bar{width:4px;height:18px;border-radius:2px}
+  .ind-cat .cnt{font-size:11px;color:var(--txt3);font-weight:400;margin-left:auto;font-family:var(--mono)}
+  .ind-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
+  .ind-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:.15s}
+  .ind-card:hover{border-color:#3a4250}
+  .ind-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+  .ind-head .nm{font-size:15px;font-weight:700;color:var(--txt)}
+  .ind-head .ab{font-size:11px;color:var(--txt3);font-family:var(--mono);background:var(--bg);padding:1px 6px;border-radius:4px}
+  .ind-fld{margin-bottom:9px}
+  .ind-fld .l{font-size:10.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;font-weight:600}
+  .ind-fld .v{font-size:12.5px;color:var(--txt2);line-height:1.6}
+  .ind-fld.long .v{color:var(--green)}
+  .ind-fld.short .v{color:var(--red)}
+  .ind-fld.tip .v{color:var(--blue)}
+  .ind-fld.trap .v{color:var(--yellow)}
+  .ind-fld.long .l,.ind-fld.short .l,.ind-fld.tip .l,.ind-fld.trap .l{display:inline-flex;align-items:center;gap:4px}
+  .ind-fld.long .l::before{content:"▲";color:var(--green)}
+  .ind-fld.short .l::before{content:"▼";color:var(--red)}
+  .ind-fld.tip .l::before{content:"◆";color:var(--blue)}
+  .ind-fld.trap .l::before{content:"!";color:var(--yellow);font-weight:700}
+  .ind-intro{background:linear-gradient(135deg,var(--bg3),var(--card));border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:6px}
+  .ind-intro .h{font-size:16px;font-weight:700;margin-bottom:8px}
+  .ind-intro p{color:var(--txt2);font-size:13.5px;line-height:1.7}
+  .ind-three{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
+  .ind-three .b{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px}
+  .ind-three .b .bt{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+  .ind-three .b .bb{font-size:12.5px;color:var(--txt2);line-height:1.6}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--txt3);margin-bottom:10px}
+  .legend span{display:inline-flex;align-items:center;gap:4px}
+  .ind-svg{display:block;width:100%;height:auto;margin:10px 0 4px;border:1px solid var(--border);border-radius:6px;background:#0b0e14}
+  /* screener */
+  .scr-input{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+  .scr-input label{font-size:12px;color:var(--txt2)}
+  .scr-input input{background:var(--bg);border:1px solid var(--border);color:var(--txt);padding:8px 11px;border-radius:7px;font-size:14px;font-family:inherit;width:100%;margin-top:6px}
+  .scr-group{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px}
+  .scr-group.long{border-left:3px solid var(--green)}
+  .scr-group.late{border-left:3px solid var(--red)}
+  .scr-group .gt{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .scr-group.long .gt{color:var(--green)}.scr-group.late .gt{color:var(--red)}
+  .scr-item{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;transition:.12s}
+  .scr-item:hover{background:var(--bg3)}
+  .scr-item .box{width:18px;height:18px;border:1.5px solid var(--border);border-radius:5px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:12px;color:transparent;transition:.12s}
+  .scr-item.on .box{background:var(--green);border-color:var(--green);color:#041020}
+  .scr-group.late .scr-item.on .box{background:var(--red);color:#fff}
+  .scr-item .tx .l2{font-size:13px;color:var(--txt);font-weight:500}
+  .scr-item .tx .h2{font-size:11px;color:var(--txt3);margin-top:1px}
+  .scr-verdict{background:linear-gradient(135deg,var(--bg3),var(--card));border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-top:14px;min-height:60px}
+  .scr-verdict .stage{font-size:18px;font-weight:700;margin-bottom:6px}
+  .scr-verdict .act{font-size:13.5px;color:var(--txt);line-height:1.7;margin-bottom:8px}
+  .scr-verdict .warn{font-size:12.5px;line-height:1.6;border-left:3px solid;padding-left:10px;margin-top:8px}
+  .scr-meter{display:flex;gap:10px;margin-bottom:10px;font-size:12px}
+  .scr-meter .m{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px}
+  .scr-meter .m .n{font-family:var(--mono);font-weight:700}
+  .scr-ref{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-top:14px}
+  .scr-ref table{width:100%;font-size:12.5px}
+  .scr-ref th,.scr-ref td{padding:7px 9px;border-bottom:1px solid var(--border);text-align:left}
+  .scr-ref th{color:var(--txt3);font-weight:500;font-size:11px;text-transform:uppercase}
+  code.blk{display:block;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:12px 14px;font-family:var(--mono);font-size:11.5px;color:var(--green);line-height:1.8;white-space:pre-wrap;margin:8px 0}
+  .scr-tier{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .tier-item{flex:1;min-width:120px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 11px;cursor:pointer;text-align:center;font-size:12px;color:var(--txt2);transition:.12s}
+  .tier-item:hover{border-color:#3a4250}
+  .tier-item.on{background:var(--bluebg);border-color:var(--blue);color:var(--blue);font-weight:600}
+  .scr-tierinfo{margin-top:8px;font-size:12.5px;color:var(--txt2);background:var(--bg);border-radius:7px;padding:8px 11px}
+  .scr-tierinfo b{color:var(--txt)}
+  .scr-tier-banner{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:11.5px;color:var(--txt2);margin-bottom:10px}
+  .scr-tier-banner b{color:var(--blue)}
+.toggle{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.toggle input{position:absolute;opacity:0;width:0;height:0}
+.toggle-slider{position:relative;width:36px;height:20px;background:var(--bg3);border-radius:10px;transition:.2s;border:1px solid var(--border)}
+.toggle input:checked+.toggle-slider{background:var(--green);border-color:var(--green)}
+.toggle-slider::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:1px;left:1px;transition:.2s}
+.toggle input:checked+.toggle-slider::after{left:17px}
+ </style>
+</head>
+<body>
+<div class="app">
+  <!-- sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="t">📊 操盘手日志</div>
+      <div class="s">TRADING JOURNAL v1.0</div>
+    </div>
+    <nav class="nav" id="nav">
+      <a data-page="dashboard" class="active"><span class="ic">▣</span> 仪表盘</a>
+      <a data-page="new"><span class="ic">✎</span> 新建日志</a>
+      <a data-page="list"><span class="ic">≡</span> 日志列表</a>
+      <a data-page="indicators"><span class="ic">▤</span> 指标参考</a>
+      <a data-page="screener"><span class="ic">◎</span> 选币筛子</a>
+      <a data-page="guide"><span class="ic">★</span> 进步指南</a>
+      <a data-page="tools"><span class="ic">🔧</span> 工具箱</a>
+      <a data-page="data"><span class="ic">⚙</span> 数据管理</a>
+    </nav>
+    <div class="foot">本地存储 · 双击运行<br>支持 Windows / macOS</div>
+  </aside>
+
+  <!-- main -->
+  <main class="main">
+    <!-- DASHBOARD -->
+    <section class="page active" id="page-dashboard">
+      <div class="page-head">
+        <div><h1>仪表盘</h1><div class="sub">整体表现概览 · 按已保存日志自动统计</div></div>
+        <button class="btn primary" onclick="go('new')">+ 新建交易日志</button>
+      </div>
+
+      <!-- 统计卡片：由 JS 动态渲染 -->
+      <div class="grid stat-grid" id="stats"></div>
+
+      <!-- 资金曲线：由 JS 动态渲染 -->
+      <div id="equityCurveBox"></div>
+
+      <!-- 近期日志 -->
+      <div class="card" style="margin-top:16px">
+        <div class="section-title">近期日志</div>
+        <div class="scroll-x"><table id="recentTable"></table></div>
+      </div>
+
+      <!-- 工具区 -->
+      <div class="card" style="margin-top:16px">
+        <div class="section-title" style="margin-top:0">震荡幅度计算器</div>
+        <div style="display:flex;gap:10px">
+          <div class="field" style="margin:0;flex:2"><label>现价</label><input type="number" step="any" id="swingPrice" placeholder="输入当前币价"></div>
+          <div style="flex:1;display:flex;align-items:flex-end"><button class="btn primary" style="width:100%" onclick="calcSwing()">计算</button></div>
+        </div>
+        <div id="swingOut" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="section-title" style="margin-top:0">仓位计算器</div>
+        <div class="row" style="grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field" style="margin:0"><label>账户资金</label><input type="number" step="any" id="posAccount" placeholder="如 10000"></div>
+          <div class="field" style="margin:0"><label>风险比例 % <span class="hint">推荐 ≤2</span></label><input type="number" step="any" id="posRisk" value="2"></div>
+          <div class="field" style="margin:0"><label>入场价</label><input type="number" step="any" id="posEntry" placeholder="如 68000"></div>
+          <div class="field" style="margin:0"><label>止损价</label><input type="number" step="any" id="posStop" placeholder="如 67500"></div>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <input type="number" step="any" id="posLeverage" value="1" placeholder="杠杆" style="width:60px">
+          <button class="btn primary" onclick="calcPosition()">计算</button>
+        </div>
+        <div id="posOut" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="section-title" style="margin-top:0">开仓必看清单</div>
+        <div class="callout" style="margin-bottom:12px">每次开仓前过一遍这些用血换来的规则。可手动添加 / 编辑 / 删除，自动本地保存。已按 <b>开多 / 开空 / 通用</b> 分组。</div>
+        <div id="checklistBox"></div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn sm" onclick="addChecklistItem('long')">+ 开多条</button>
+          <button class="btn sm" onclick="addChecklistItem('short')">+ 开空条</button>
+          <button class="btn sm" onclick="addChecklistItem('general')">+ 通用条</button>
+          <button class="btn sm" onclick="resetChecklistToDefault()">恢复默认</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEW / EDIT -->
+    <section class="page" id="page-new">
+      <div class="page-head">
+        <div><h1 id="formTitle">新建交易日志</h1><div class="sub" id="formSub">填写越完整，自动评测越准确 · 标 <span style="color:var(--red)">*</span> 为必填</div></div>
+        <button class="btn" onclick="go('list')">← 返回列表</button>
+      </div>
+      <form class="form-card" id="entryForm" onsubmit="return false">
+        <input type="hidden" id="editId">
+
+        <div class="section-title">① 基础信息</div>
+        <div class="row">
+          <div class="field"><label>日期 <span class="req">*</span></label><input type="date" id="f_date" required></div>
+          <div class="field"><label>市场 <span class="req">*</span></label>
+            <select id="f_market"><option value="spot">现货 Spot</option><option value="perp" selected>U本位永续</option><option value="coinm">币本位合约</option></select>
+          </div>
+          <div class="field"><label>标的 <span class="req">*</span> <span class="hint">如 BTC/USDT、AAPL</span></label><input type="text" id="f_symbol" placeholder="BTC/USDT" required></div>
+          <div class="field"><label>方向 <span class="req">*</span></label>
+            <select id="f_direction"><option value="long">做多 Long</option><option value="short">做空 Short</option></select>
+          </div>
+          <div class="field"><label>策略类型 <span class="req">*</span></label>
+            <select id="f_setup">
+              <option value="趋势跟踪">趋势跟踪</option>
+              <option value="突破">突破</option>
+              <option value="突破回踩">突破回踩</option>
+              <option value="区间">区间震荡</option>
+              <option value="反转">反转</option>
+              <option value="动量">动量</option>
+              <option value="波段">波段</option>
+              <option value="剥头皮">剥头皮</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div class="field"><label>周期 Timeframe <span class="req">*</span></label>
+            <select id="f_timeframe"><option>1m</option><option>5m</option><option>15m</option><option>1H</option><option selected>4H</option><option>1D</option><option>1W</option></select>
+          </div>
+        </div>
+        <div class="field"><label>标签 <span class="hint">回车添加，如 高概率、FOMO、违背计划</span></label>
+          <div class="tagbox" id="f_tags"><input type="text" id="tagInput" placeholder="输入后回车"></div>
+        </div>
+
+        <div class="section-title" style="margin-top:20px">② 交易参数 <span class="hint" style="text-transform:none;font-weight:400">—— 用于自动计算盈亏、R倍数、风险%</span></div>
+        <div class="row">
+          <div class="field"><label>入场价 Entry <span class="req">*</span></label><input type="number" step="any" id="f_entry" required></div>
+          <div class="field" id="exitField"><label>出场价 Exit <span class="req">*</span></label><input type="number" step="any" id="f_exit" required></div>
+          <div class="field"><label>仓位数量 Size <span class="req">*</span> <span class="hint">币数 / 股数 / 合约数</span></label><input type="number" step="any" id="f_size" required></div>
+          <div class="field"><label>止损价 Stop <span class="req">*</span></label><input type="number" step="any" id="f_stop" required></div>
+          <div class="field">
+            <label>止盈目标 <span class="hint">分批出场计划</span></label>
+            <div id="targetList" style="display:flex;flex-direction:column;gap:6px"></div>
+            <button class="btn sm" onclick="addTarget()" style="margin-top:6px;font-size:11px">+ 添加目标位</button>
+          </div>
+          <div class="field"><label>账户总资金 <span class="req">*</span> <span class="hint">用于算仓位占比与爆仓风险</span></label><input type="number" step="any" id="f_account" required></div>
+          <div class="field"><label>手续费 Fees</label><input type="number" step="any" id="f_fees" value="0"></div>
+          <div class="field" id="leverageField"><label>杠杆 Leverage <span class="hint">合约倍数，现货填1</span></label><input type="number" step="any" id="f_leverage" value="1"></div>
+          <div class="field">
+            <label>保证金模式</label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px">逐仓</span>
+              <label class="toggle" style="display:flex;align-items:center">
+                <input type="checkbox" id="f_marginMode" checked onchange="liveCalc()">
+                <span class="toggle-slider"></span>
+              </label>
+              <span style="font-size:13px">全仓</span>
+            </div>
+          </div>
+        </div>
+        <div class="callout" id="liveCalc">填写交易参数后将自动计算 盈亏 / R倍数 / 风险占比 / 计划盈亏比</div>
+
+        <div class="field"><label>交易状态</label>
+          <label class="toggle" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="f_status" checked onchange="toggleStatus()">
+            <span class="toggle-slider"></span>
+            <span id="statusLabel">已平仓</span>
+          </label>
+        </div>
+
+        <div class="section-title" style="margin-top:20px">③ 市场环境与计划</div>
+        <div class="row">
+          <div class="field"><label>大趋势</label>
+            <select id="f_trend"><option>上升趋势</option><option>下降趋势</option><option>震荡</option><option>盘整</option></select>
+          </div>
+          <div class="field"><label>大盘环境</label>
+            <select id="f_regime"><option>强势</option><option>正常</option><option>弱势</option><option>剧烈波动</option></select>
+          </div>
+        </div>
+        <div class="field"><label>入场逻辑 <span class="req">*</span> <span class="hint">进场前写——为什么进、看到了什么信号</span></label>
+          <textarea id="f_entryReason" placeholder="例：BTC 4H 站上200EMA，成交量放大突破前高68000，回踩67500不破，RSI 55健康。计划在67550进场，止损67400（下方结构），目标69000。盈亏比约3:1。" required></textarea>
+        </div>
+        <div class="field" id="exitReasonField"><label>出场逻辑 <span class="hint">出场后写——为什么出、是计划内还是临时起意</span></label>
+          <textarea id="f_exitReason" placeholder="例：价格到达69000目标位，按计划减仓50%；剩余仓位跌破68000前低，平仓。整体符合计划。"></textarea>
+        </div>
+
+        <div class="section-title" style="margin-top:20px">④ 心态与情绪</div>
+        <div class="row">
+          <div class="field"><label>进场时情绪</label>
+            <select id="f_emotion_entry"><option>冷静</option><option>自信</option><option>犹豫</option><option>FOMO追单</option><option>报复性</option><option>恐惧</option></select>
+          </div>
+          <div class="field"><label>持仓时情绪</label>
+            <select id="f_emotion_hold"><option>平静</option><option>焦虑</option><option>贪婪加仓</option><option>恐慌提前砍</option><option>死扛不认错</option></select>
+          </div>
+          <div class="field"><label>平仓后情绪</label>
+            <select id="f_emotion_after"><option>释怀</option><option>懊悔卖飞</option><option>挫败自责</option><option>庆幸扛回</option><option>不甘心</option></select>
+          </div>
+        </div>
+        <div class="field"><label>情绪备注</label>
+          <textarea id="f_emotionNote" placeholder="记录真实感受，便于日后发现模式：比如『每次连亏后我都想重仓扳回』"></textarea>
+        </div>
+
+        <div class="section-title" style="margin-top:20px">⑤ 复盘反思</div>
+        <div class="field"><label>犯了哪些错</label>
+          <textarea id="f_mistakes" placeholder="诚实记录，比如：止损被手动往后移了、没到信号就提前进、仓位太重"></textarea>
+        </div>
+        <div class="field"><label>学到了什么 <span class="req">*</span></label>
+          <textarea id="f_lessons" placeholder="提炼可复用的规则，而不是泛泛的『要控制情绪』。比如：突破后首次回踩EMA21且量缩，是高胜率加仓点。" required></textarea>
+        </div>
+        <div class="field"><label>如果重来会怎么做</label>
+          <textarea id="f_redo" placeholder="具体的改进动作，比如：下次仓位减半、等4H收盘确认再进"></textarea>
+        </div>
+
+        <div class="section-title" style="margin-top:20px">⑥ 自我评分 <span class="hint" style="text-transform:none;font-weight:400">—— 1=很差 5=优秀</span></div>
+        <div class="score-grid" id="scoreGrid"></div>
+
+        <hr class="sep">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn primary" onclick="saveEntry()">💾 保存并生成评测</button>
+          <button class="btn" onclick="resetForm()">清空</button>
+          <label class="btn">📎 附图（可选）<input type="file" accept="image/*" id="f_img" style="display:none" onchange="handleImg(event)"></label>
+          <span id="imgName" style="font-size:12px;color:var(--txt3);align-self:center"></span>
+        </div>
+      </form>
+    </section>
+
+    <!-- LIST -->
+    <section class="page" id="page-list">
+      <div class="page-head">
+        <div><h1>日志列表</h1><div class="sub">点击行查看完整复盘与自动评测</div></div>
+        <button class="btn primary" onclick="go('new')">+ 新建</button>
+      </div>
+      <div class="filters">
+        <select id="filterMarket"><option value="">全部类型</option><option value="spot">现货</option><option value="perp">U本位永续</option><option value="coinm">币本位</option></select>
+        <select id="filterResult"><option value="">全部结果</option><option value="win">盈利</option><option value="loss">亏损</option><option value="be">平</option></select>
+        <input type="text" id="filterSearch" placeholder="搜索 标的/标签/策略">
+        <button class="btn sm" onclick="renderList()">筛选</button>
+      </div>
+      <div class="card">
+        <div class="scroll-x"><table id="listTable"></table></div>
+      </div>
+    </section>
+
+    <!-- INDICATORS -->
+    <section class="page" id="page-indicators">
+      <div class="page-head">
+        <div><h1>指标参考</h1><div class="sub">币圈 K 线实战指标手册 · 多空通用 · 操盘手视角</div></div>
+      </div>
+      <div id="indicatorsBody"></div>
+    </section>
+
+    <!-- SCREENER -->
+    <section class="page" id="page-screener">
+      <div class="page-head">
+        <div><h1>选币筛子</h1><div class="sub">勾选当前满足的条件 · 自动判断币处于哪一阶段 + 给出动作</div></div>
+      </div>
+      <div class="scr-input">
+        <label>币种名称 <span class="hint">可选，便于记录</span></label>
+        <input type="text" id="scrCoin" placeholder="如 SOL/USDT">
+      </div>
+
+      <div class="scr-input">
+        <label>市值档 <span class="hint">决定预期涨幅与量/市值阈值，市值不挡结构筛选</span></label>
+        <div class="scr-tier" id="scrTier">
+          <div class="tier-item" data-tier="low" onclick="scrTier(this)">低市值 &lt;$100M</div>
+          <div class="tier-item on" data-tier="mid" onclick="scrTier(this)">中市值 $100M–$1B</div>
+          <div class="tier-item" data-tier="big" onclick="scrTier(this)">大市值 $1B–$5B+</div>
+        </div>
+        <div class="scr-tierinfo" id="scrTierInfo"></div>
+      </div>
+
+      <div class="scr-group long">
+        <div class="gt">▲ A 组 · 趋势健康 / 早段做多条件 <span style="font-size:11px;color:var(--txt3);font-weight:400">（满足越多，越接近"可做多"）</span></div>
+        <div id="scrA"></div>
+      </div>
+      <div class="scr-group late">
+        <div class="gt">▼ B 组 · 末段见顶 / 空饵信号 <span style="font-size:11px;color:var(--txt3);font-weight:400">（满足越多，越接近"别追、可能要空"）</span></div>
+        <div id="scrB"></div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn primary" onclick="scrEval()">⚖ 评估阶段与动作</button>
+        <button class="btn" onclick="scrReset()">重置勾选</button>
+      </div>
+
+      <div class="scr-verdict" id="scrVerdict">
+        <div style="color:var(--txt3);font-size:13px">勾选上方条件后点"评估"，将给出：当前阶段、可执行动作、风险提示。</div>
+      </div>
+
+      <div class="scr-ref">
+        <div class="section-title">参考：CoinGecko 筛选器参数（市值分档）</div>
+        <table>
+          <tr><th>市值档</th><th>量/市值阈值</th><th>预期涨幅</th><th>特征</th></tr>
+          <tr><td>低市值 &lt;$100M</td><td>&gt; 0.3</td><td>3–10×</td><td>暴力但易插针砸盘</td></tr>
+          <tr><td>中市值 $100M–$1B</td><td>&gt; 0.15</td><td>2–3×</td><td>主升段最清晰，最适合做</td></tr>
+          <tr><td>大市值 $1B–$5B+</td><td>&gt; 0.08</td><td>1.5–2×</td><td>需大催化，慢但扎实</td></tr>
+        </table>
+        <table style="margin-top:10px">
+          <tr><th>其他条件</th><th>设置</th><th>原理</th></tr>
+          <tr><td>7d 涨幅</td><td>+30% ~ +120%</td><td>启动中段，非已爆顶</td></tr>
+          <tr><td>流通率 Circulating</td><td>&gt; 60%</td><td>避开高解锁通胀砸盘</td></tr>
+        </table>
+        <div class="callout" style="margin-top:10px">市值只决定"能涨几倍"，不决定"是否在结构里"。是否在结构中由：放量突破前高 + EMA多头排列 + RSI未超买 + 费率未极端 决定——这些和市值无关。</div>
+      </div>
+    </section>
+
+    <!-- DETAIL -->
+    <section class="page" id="page-detail">
+      <div class="page-head">
+        <div><h1 id="dTitle">交易详情</h1><div class="sub" id="dSub"></div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="go('list')">← 列表</button>
+          <button class="btn primary" id="dEdit">✎ 编辑</button>
+          <button class="btn danger" id="dDel">🗑 删除</button>
+        </div>
+      </div>
+      <div id="detailBody"></div>
+    </section>
+
+    <!-- GUIDE -->
+    <section class="page" id="page-guide">
+      <div class="page-head"><div><h1>进步指南</h1><div class="sub">从新手到稳定盈利的系统路径</div></div></div>
+      <div id="guideBody"></div>
+    </section>
+
+    <!-- TOOLS -->
+    <section class="page" id="page-tools">
+      <div class="page-head">
+        <div><h1>工具箱</h1><div class="sub">常用交易测算小工具 · 辅助决策</div></div>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+
+        <!-- 斐波那契回撤 -->
+        <div class="card">
+          <div class="section-title">斐波那契回撤 (Fibonacci Retracement)</div>
+          <div class="row">
+            <div class="field" style="margin:0"><label>高点 High</label><input type="number" step="any" id="fibHigh" placeholder="如 70000"></div>
+            <div class="field" style="margin:0"><label>低点 Low</label><input type="number" step="any" id="fibLow" placeholder="如 60000"></div>
+          </div>
+          <div style="margin-top:14px"><button class="btn primary" onclick="calcFib()">计算</button></div>
+          <div id="fibOut" style="margin-top:14px"></div>
+        </div>
+
+        <!-- 百分比计算 -->
+        <div class="card">
+          <div class="section-title">百分比计算器</div>
+          <div class="row">
+            <div class="field" style="margin:0"><label>基础价格</label><input type="number" step="any" id="pctBase" placeholder="如 100"></div>
+            <div class="field" style="margin:0"><label>百分比 (%)</label><input type="number" step="any" id="pctVal" placeholder="如 10"></div>
+          </div>
+          <div style="margin-top:14px"><button class="btn primary" onclick="calcPct()">计算</button></div>
+          <div id="pctOut" style="margin-top:14px"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- DATA -->
+    <section class="page" id="page-data">
+      <div class="page-head"><div><h1>数据管理</h1><div class="sub">本地存储 · 随时导出备份 / 跨设备迁移</div></div></div>
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        <div class="card">
+          <div class="section-title">导出备份</div>
+          <p style="color:var(--txt2);font-size:13px;margin-bottom:14px">把全部日志导出为 JSON 文件，保存到 U盘 / 网盘 / iCloud，换电脑也能恢复。</p>
+          <button class="btn primary" onclick="exportData()">⬇ 导出全部日志 (.json)</button>
+          <div style="margin-top:10px"><button class="btn" onclick="exportCSV()">导出为 CSV（Excel 可打开）</button></div>
+        </div>
+        <div class="card">
+          <div class="section-title">导入恢复</div>
+          <p style="color:var(--txt2);font-size:13px;margin-bottom:14px">从备份文件恢复日志（会与现有数据合并，重复 ID 自动跳过）。</p>
+          <label class="btn">⬆ 选择 JSON 文件<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
+        </div>
+        <div class="card">
+          <div class="section-title">加载样例</div>
+          <p style="color:var(--txt2);font-size:13px;margin-bottom:14px">载入一个专业示范案例，展示完整填法与自动评测效果。</p>
+          <button class="btn" onclick="loadSample()">载入示范案例</button>
+        </div>
+        <div class="card" style="border-color:var(--red)">
+          <div class="section-title" style="color:var(--red)">危险区</div>
+          <p style="color:var(--txt2);font-size:13px;margin-bottom:14px">清空所有本地日志，<b style="color:var(--red)">不可恢复</b>。请先导出备份。</p>
+          <button class="btn danger" onclick="clearAll()">🗑 清空全部</button>
+        </div>
+      </div>
+      <hr class="sep">
+      <div class="card">
+        <div class="section-title">使用说明</div>
+        <ul style="margin:6px 0 0 18px;color:var(--txt2);line-height:2;font-size:13px">
+          <li>双击本 HTML 文件即可在浏览器运行，无需安装任何东西。Windows 与 macOS 完全一致。</li>
+          <li>数据自动保存在浏览器本地（localStorage），关闭再打开依然存在。</li>
+          <li>建议每周点一次「导出备份」，防止浏览器缓存被清理导致数据丢失。</li>
+          <li>不同浏览器/设备之间数据不互通，换电脑请用导出→导入。</li>
+          <li>建议固定用一个浏览器（如 Chrome）打开本文件。</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   操盘手交易日志 · 核心逻辑 (Supabase 同步版)
+   ============================================================ */
+const SB_URL='https://rinxjijqpknwtwwqozru.supabase.co';
+const SB_KEY='sb_publishable_FFN95oDHotQiNnbLD_9omw_eDMFNloU';
+let sb=null;
+try{
+  if(window.supabase){sb=window.supabase.createClient(SB_URL,SB_KEY)}
+}catch(e){console.warn('Supabase 初始化失败，使用本地模式:',e)}
+const useSync=!!sb;
+
+let entries=[];
+let curImg='';
+let editMode=false;
+let syncReady=false;
+
+/* ---------- 存储 (Supabase / localStorage 双模 · 静默回退) ---------- */
+async function load(){
+  if(!useSync){loadLocalFallback();return}
+  const ok=await sbGet('trading_entries','entries_all',d=>{entries=d||[]});
+  if(!ok||entries.length===0){ // 云端无数据 → 读本地 → 推云端
+    const local=loadLocalData();
+    if(local.length>0){entries=local;sbSet('trading_entries','entries_all',entries)}
+  }
+}
+function loadLocalData(){try{return JSON.parse(localStorage.getItem('tj_entries_v1_backup')||localStorage.getItem('tj_entries_v1'))||[]}catch(e){return[]}}
+function loadLocalFallback(){entries=loadLocalData()}
+async function persist(){
+  localStorage.setItem('tj_entries_v1_backup',JSON.stringify(entries));
+  if(!useSync)return;
+  sbSet('trading_entries','entries_all',entries);
+}
+
+async function loadChecklist(){
+  if(!useSync){checklistLocalFallback();return}
+  const ok=await sbGet('trading_checklist','checklist_main',d=>{
+    if(d&&d.length>0){checklist=d;checklist.forEach(c=>{if(!c.cat)c.cat='general'})}
+    else checklist=[];
+  });
+  if(!ok||checklist.length===0){
+    const local=loadChecklistLocalData();
+    if(local.length>0){checklist=local;sbSet('trading_checklist','checklist_main',checklist)}
+    else{checklist=DEFAULT_CHECKLIST.map((t,i)=>({id:'c'+Date.now()+i,cat:t.cat,text:t.text}));saveChecklist()}
+  }
+}
+function loadChecklistLocalData(){try{return JSON.parse(localStorage.getItem(CHK_KEY))||[]}catch(e){return[]}}
+function checklistLocalFallback(){
+  checklist=loadChecklistLocalData();
+  checklist.forEach(c=>{if(!c.cat)c.cat='general'});
+  if(checklist.length===0){checklist=DEFAULT_CHECKLIST.map((t,i)=>({id:'c'+Date.now()+i,cat:t.cat,text:t.text}));saveChecklist()}
+}
+async function saveChecklist(){
+  localStorage.setItem(CHK_KEY,JSON.stringify(checklist));
+  if(!useSync)return;
+  sbSet('trading_checklist','checklist_main',checklist);
+}
+
+/* 通用 Supabase 读：返回 true=成功, false=回退本地。全部静默，不刷红报错 */
+async function sbGet(table,id,cb){
+  try{
+    const {data,error}=await sb.from(table).select('data').eq('id',id).maybeSingle();
+    if(error){console.debug('云端读取不可用:',error.code||error.message);return false}
+    cb(data?.data);
+    return true;
+  }catch(e){console.debug('云端连接失败');return false}
+}
+/* 通用 Supabase 写：fire-and-forget，失败静默 */
+async function sbSet(table,id,payload){
+  try{
+    const {error}=await sb.from(table).upsert({id,data:payload,updated_at:new Date().toISOString()});
+    if(error)console.debug('云端写入失败:',error.code||error.message);
+  }catch(e){}
+}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+
+/* ---------- 导航 ---------- */
+function go(page,id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('active',a.dataset.page===page));
+  if(page==='dashboard'){renderDashboard();renderChecklist()}
+  if(page==='list')renderList();
+  if(page==='guide')renderGuide();
+  if(page==='indicators')renderIndicators();
+  if(page==='new'&&!editMode)resetForm();
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('#nav a').forEach(a=>a.onclick=()=>go(a.dataset.page));
+
+/* ---------- 标签输入 ---------- */
+let curTags=[];
+let targetsData=[];
+function renderTags(){
+  const box=document.getElementById('f_tags');
+  box.querySelectorAll('.tag').forEach(t=>t.remove());
+  curTags.forEach((t,i)=>{
+    const el=document.createElement('span');el.className='tag';
+    el.innerHTML=t+'<span class="x" onclick="rmTag('+i+')">×</span>';
+    box.insertBefore(el,document.getElementById('tagInput'));
+  });
+}
+function rmTag(i){curTags.splice(i,1);renderTags()}
+document.getElementById('tagInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'||e.key===','){e.preventDefault();
+    const v=e.target.value.trim();if(v&&!curTags.includes(v)){curTags.push(v);renderTags()}
+    e.target.value='';
+  }
+});
+
+/* ---------- 自评打分 ---------- */
+const SCORE_KEYS=[
+  ['planExecution','计划执行力','是否严格按计划进出场'],
+  ['entryTiming','入场时机','信号是否清晰、是否提前/滞后'],
+  ['exitTiming','出场时机','是否让利润奔跑/及时止损'],
+  ['riskMgmt','风险管理','仓位与止损是否合理'],
+  ['emotionCtrl','情绪控制','是否受贪婪恐惧干扰']
+];
+let scores={};
+function renderScores(){
+  const g=document.getElementById('scoreGrid');g.innerHTML='';
+  SCORE_KEYS.forEach(([k,title,desc])=>{
+    scores[k]=scores[k]||0;
+    const c=document.createElement('div');c.className='field';
+    c.innerHTML=`<label>${title} <span class="hint">${desc}</span></label>`;
+    const r=document.createElement('div');r.className='rating';
+    for(let i=1;i<=5;i++){
+      const d=document.createElement('div');d.className='dot'+(i<=scores[k]?' on':'');d.textContent=i;
+      d.onclick=()=>{scores[k]=i;renderScores()};
+      r.appendChild(d);
+    }
+    c.appendChild(r);g.appendChild(c);
+  });
+}
+
+/* ---------- 图片 ---------- */
+function handleImg(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{curImg=r.result;document.getElementById('imgName').textContent=f.name+' ✓'};
+  r.readAsDataURL(f);
+}
+
+/* ---------- 实时计算 ---------- */
+function cc(l,v,c,hi){return '<div class="calc-card'+(hi?' hi':'')+'"><div class="cl">'+l+'</div><div class="cv" style="color:'+(c||'var(--txt)')+'">'+v+'</div></div>'}
+function liveCalc(){
+  const e=getNum('f_entry'),x=getNum('f_exit'),st=getNum('f_stop'),ac=getNum('f_account'),fe=getNum('f_fees'),dir=document.getElementById('f_direction').value,L=Math.max(1,getNum('f_leverage')||1);
+  const tg=targetsData.length>0?targetsData[0].price:0;
+  const box=document.getElementById('liveCalc');
+  if(!e||!ac){
+    box.className='callout';box.innerHTML='<div class="calc-hint">填写「入场价 + 仓位 + 账户资金」后自动算 <b style="color:var(--blue)">仓位占比</b> 与 <b style="color:var(--red)">爆仓风险</b>。</div>';
+    return;
+  }
+  const s=getNum('f_size');
+  const dirSign=dir==='long'?1:-1;
+  const hasSize=s>0,hasExit=x>0,hasStop=st>0;
+  const notional=e*s;                              // 仓位价值(名义)
+  const margin=notional/L;                         // 保证金
+  const posRatio=hasSize&&ac>0?notional/ac*100:0;   // 仓位价值占账户%
+  const marginRatio=hasSize&&ac>0?margin/ac*100:0; // 保证金占账户%(占总资金)
+  const pnl=hasSize&&hasExit?(x-e)*s*dirSign-(fe||0):0;
+  const riskAmt=Math.abs(e-st)*s;                  // 到止损亏损额
+  const lossPct=hasSize&&hasStop&&ac>0?riskAmt/ac*100:0; // 到止损亏损占账户%
+  const rMult=hasSize&&hasExit&&riskAmt>0?pnl/riskAmt:0;
+  const planRR=tg>0&&hasStop?(Math.abs(tg-e)/Math.abs(e-st)):0;
+  const marginMode=document.getElementById('f_marginMode').checked?'isolated':'cross';
+  let liq;
+  if(marginMode==='cross'&&ac>0){
+    if(dirSign>0){
+      const denom=e*s;
+      liq=denom>0?e-ac/s:0;
+      if(liq<0)liq=0.000001;
+    }else{
+      liq=e+ac/s;
+    }
+  }else{
+    liq=dirSign>0?e*(1-1/L):e*(1+1/L);
+  }
+  const liqDist=hasSize?Math.abs(liq-e)/e*100:0;   // 距爆仓%(价格反向走多少爆仓)
+  const stopEffective=dirSign>0?(st>liq):(st<liq);  // 止损是否在爆仓价之内(有效)
+  const pc=c=>c>=0?'var(--green)':'var(--red)';
+  const posCol=posRatio<=100?'var(--green)':posRatio<=300?'var(--yellow)':'var(--red)';
+  const marCol=marginRatio<=50?'var(--green)':marginRatio<=80?'var(--yellow)':'var(--red)';
+  const lossCol=lossPct<=2?'var(--green)':lossPct<=5?'var(--yellow)':'var(--red)';
+  const liqDistCol=liqDist<5?'var(--red)':liqDist<10?'var(--yellow)':'var(--txt2)';
+  const warns=[];
+  if(hasSize&&marginRatio>80)warns.push(['w-red','⚠ 保证金占用 '+marginRatio.toFixed(0)+'%，剩余保证金不足，极易爆仓——减仓或追加保证金']);
+  if(hasStop&&!stopEffective)warns.push(['w-red','✗ 止损在爆仓价之外，会先被强平触发，止损无效！请把止损收紧到爆仓价之内']);
+  if(hasSize&&hasStop&&stopEffective&&lossPct>5)warns.push(['w-yel','⚠ 到止损会亏账户 '+lossPct.toFixed(1)+'%，超过5%，仓位偏重']);
+  if(L>20)warns.push(['w-yel','⚠ '+L+'x 杠杆过高，价格反向仅 '+(100/L).toFixed(1)+'% 即爆仓']);
+  if(hasSize&&liqDist<5)warns.push(['w-red','⚠ 距爆仓仅 '+liqDist.toFixed(1)+'%，随时可能强平']);
+  box.className='callout';
+  box.innerHTML=
+    '<div style="font-size:11px;color:var(--txt3);margin-bottom:2px">实时测算</div>'+
+    '<div class="calc-grid">'+
+      cc('盈亏 P&L',hasExit?fmt(pnl):'—',hasExit?pc(pnl):'var(--txt3)')+
+      cc('R倍数',(hasSize&&hasExit)?rMult.toFixed(2)+'R':'—',(hasSize&&hasExit)?pc(rMult):'var(--txt3)')+
+      (planRR?cc('计划盈亏比','1:'+planRR.toFixed(1),'var(--txt)'):'')+
+      cc('仓位价值占比',hasSize?posRatio.toFixed(0)+'%':'—',hasSize?posCol:'var(--txt3)')+
+      cc('保证金占总资金',hasSize?marginRatio.toFixed(0)+'%':'—',hasSize?marCol:'var(--txt3)',true)+
+      cc('爆仓价',hasSize?liq.toFixed(4):'—','var(--red)')+
+      cc('距爆仓',hasSize?liqDist.toFixed(1)+'%':'—',hasSize?liqDistCol:'var(--txt3)')+
+      cc('到止损亏损',hasSize&&hasStop?'-'+lossPct.toFixed(1)+'%':'—',hasSize&&hasStop?lossCol:'var(--txt3)')+
+    '</div>'+
+    (warns.length?'<div class="calc-warn">'+warns.map(w=>'<div class="'+w[0]+'">'+w[1]+'</div>').join('')+'</div>':'');
+}
+['f_entry','f_exit','f_size','f_stop','f_account','f_fees','f_direction','f_leverage'].forEach(id=>document.getElementById(id).addEventListener('input',liveCalc));
+
+/* ---------- 评测引擎 ---------- */
+function evaluate(d){
+  const dirSign=d.direction==='long'?1:-1;
+  let pnl;
+  if(d.targets&&d.targets.length>0){
+    let totalPnl=0;let totalRatio=0;
+    for(const t of d.targets){
+      if(t.hit&&t.price>0){
+        const ratio=t.ratio/100;
+        const exitPrice=t.actualExit>0?t.actualExit:t.price;
+        totalPnl+=(exitPrice-d.entry)*d.size*ratio*dirSign;
+        totalRatio+=t.ratio;
+      }
+    }
+    if(totalRatio<100&&d.exit>0){
+      const remRatio=(100-totalRatio)/100;
+      totalPnl+=(d.exit-d.entry)*d.size*remRatio*dirSign;
+    }
+    pnl=totalPnl-(d.fees||0);
+  }else{
+    pnl=(d.exit-d.entry)*d.size*dirSign-(d.fees||0);
+  }
+  const riskAmt=Math.abs(d.entry-d.stop)*d.size;
+  const rMult=riskAmt>0?pnl/riskAmt:0;
+  const riskPct=d.account>0?riskAmt/d.account*100:0;
+  const planRR=d.target?(Math.abs(d.target-d.entry)/Math.abs(d.entry-d.stop)):0;
+  const hasStop=true; // 表单强制
+  const selfAvg=(d.selfScore.planExecution+d.selfScore.entryTiming+d.selfScore.exitTiming+d.selfScore.riskMgmt+d.selfScore.emotionCtrl)/5;
+
+  // 分项扣分与建议
+  const issues=[];const goods=[];const warns=[];
+
+  // 风险%
+  if(riskPct>5){issues.push(`单笔风险 ${riskPct.toFixed(1)}% 远超 2% 红线——这是爆仓的根源。下一笔硬性降到 ≤2%。`)}
+  else if(riskPct>2){warns.push(`单笔风险 ${riskPct.toFixed(1)}% 略高于 2%，仓位偏重，建议下调。`)}
+  else{goods.push(`单笔风险 ${riskPct.toFixed(1)}% 控制在 2% 以内，仓位管理合格。`)}
+
+  // 计划盈亏比
+  if(planRR&&planRR<2){warns.push(`计划盈亏比 1:${planRR.toFixed(1)} < 1:2，长期难盈利。只做 ≥1:2 的机会。`)}
+  else if(planRR>=2){goods.push(`计划盈亏比 1:${planRR.toFixed(1)} ≥ 1:2，正期望结构。`)}
+
+  // R倍数结果
+  if(rMult<=-1.5){issues.push(`实际亏损 ${rMult.toFixed(2)}R，远超 1R 止损——你移动了止损或扛单。最致命的错误。`)}
+  else if(rMult<-1){issues.push(`亏损超过 1R（${rMult.toFixed(2)}R），止损没执行或被拖大。`)}
+  else if(rMult>=2){goods.push(`盈利 ${rMult.toFixed(2)}R，是高质量交易，R倍数优秀。`)}
+  else if(rMult>=1){goods.push(`盈利 ${rMult.toFixed(2)}R，达到 1R 以上，可接受。`)}
+
+  // 情绪
+  const badEmo=['FOMO追单','报复性','恐慌提前砍','死扛不认错','贪婪加仓'];
+  if(badEmo.includes(d.emotionEntry)||badEmo.includes(d.emotionHold)){issues.push(`情绪标签命中负面项（${[d.emotionEntry,d.emotionHold].filter(x=>badEmo.includes(x)).join(' / ')}）——交易在情绪驱动下做决策，是亏钱主因。`)}
+  const badAfter=['懊悔卖飞','挫败自责','不甘心'];
+  if(badAfter.includes(d.emotionAfter)){warns.push(`平仓后情绪『${d.emotionAfter}』——说明出场没按计划或心态失衡。有利润随时可走，卖飞不纠结；亏损则复盘而非自责。`)}
+
+  // 杠杆（币圈合约专属）
+  const L=Math.max(1,d.leverage||1);
+  const marginMode=d.marginMode||'isolated';
+  let liq;
+  if(marginMode==='cross'&&(d.account||0)>0){
+    const ac=d.account||0;
+    const s=d.size||0;
+    if(d.direction==='long'){
+      const denom=d.entry*s;
+      liq=denom>0?d.entry-ac/s:0;
+      if(liq<0)liq=0.000001;
+    }else{
+      liq=d.entry+ac/s;
+    }
+  }else{
+    liq=d.direction==='long'?d.entry*(1-1/L):d.entry*(1+1/L);
+  }
+  const stopBeyondLiq=(d.direction==='long')?d.stop<liq:d.stop>liq;
+  if(stopBeyondLiq){issues.push(`${L}x 杠杆下估算爆仓价 ${liq.toFixed(4)} 在止损价 ${d.stop} 之外——会先被强平才到止损，等于没止损。币圈高杠杆=把命运交给爆仓价。`)}
+  else if(L>=20){issues.push(`${L}x 杠杆过高，爆仓距离极近（距入场 ${(L>=1?(100/L):0).toFixed(1)}%），币圈高杠杆=赌方向。建议降到 10x 以内。`)}
+  else if(L>10){warns.push(`${L}x 杠杆偏高，爆仓距离近，务必保证止损在爆仓价之内。`)}
+  else if(L>1){goods.push(`${L}x 杠杆适中，爆仓距离可控。`)}
+
+  // 自评
+  if(selfAvg>=4){goods.push(`自评均分 ${selfAvg.toFixed(1)}/5，执行力优秀，继续保持一致性。`)}
+  else if(selfAvg<2.5){issues.push(`自评均分 ${selfAvg.toFixed(1)}/5，多环节失控，建议暂停交易、回到模拟盘校准。`)}
+
+  // 复盘深度
+  let depth=0;
+  ['entryReason','exitReason','mistakes','lessons','redo'].forEach(k=>{if((d[k]||'').length>40)depth++});
+  if(depth<3){warns.push(`复盘字段填充不足（${depth}/5 项有实质内容）。复盘越具体，进步越快——『要控制情绪』不算复盘，『下次4H收盘确认再进』才算。`)}
+  else{goods.push(`复盘深度充分（${depth}/5 项），这正是稳定盈利者的习惯。`)}
+
+  // 是否违背计划
+  if(d.mistakes&&/提前|没等|手动.*止损|移.*止损|加仓|重仓|违背|冲动/.test(d.mistakes)){
+    issues.push(`『犯错』栏出现违背计划关键词——一致性是系统的生命线，先解决执行，再谈优化。`);
+  }
+
+  // 综合得分
+  let score=selfAvg*20; // 基础0-100
+  if(riskPct>2)score-=15;if(riskPct>5)score-=15;
+  if(planRR&&planRR<2)score-=10;
+  if(rMult<-1)score-=15;if(rMult<=-1.5)score-=15;
+  if(rMult>=2)score+=10;
+  if(depth>=4)score+=5;if(depth<3)score-=5;
+  if(badEmo.some(e=>d.emotionEntry===e||d.emotionHold===e))score-=10;
+  if(stopBeyondLiq)score-=15;else if(L>=20)score-=10;else if(L>10)score-=5;
+  score=Math.max(0,Math.min(100,score));
+
+  let grade;
+  if(score>=85)grade='A';
+  else if(score>=70)grade='B';
+  else if(score>=50)grade='C';
+  else grade='D';
+
+  const gradeText={A:'优秀 · 系统化执行',B:'良好 · 基本到位',C:'及格 · 有明显短板',D:'不及格 · 需暂停复盘'}[grade];
+
+  // 生成总结语
+  const win=pnl>=0;
+  let summary;
+  if(issues.length===0&&warns.length===0){
+    summary=win?`一笔执行到位的${win?'盈利':'规范'}交易，几乎挑不出问题。把这种状态复制100次，你就是稳定盈利者。`:`规范但亏损的交易——执行没问题，亏损是概率成本，继续做这类机会即可。`;
+  }else if(issues.length>=2){
+    summary=`这笔暴露了多个系统性问题（${issues.length}项严重）。别急着开下一笔，先解决最致命的那一个。`;
+  }else{
+    summary=`整体框架在，但有可优化点。重点看下方"改进建议"第一条。`;
+  }
+
+  return{pnl,rMult,riskPct,planRR,score,grade,gradeText,selfAvg,depth,issues,goods,warns,summary,win};
+}
+
+/* ---------- 保存 ---------- */
+function getNum(id){const el=document.getElementById(id);if(!el)return 0;const v=parseFloat(el.value);return isNaN(v)?0:v}
+function getVal(id){return document.getElementById(id).value}
+function saveEntry(){
+  const date=getVal('f_date'),symbol=getVal('f_symbol');
+  if(!date||!symbol||!scores.planExecution){toast('请填写必填项与自评打分');return}
+  const status=document.getElementById('f_status').checked?'closed':'open';
+  const targets=targetsData.filter(t=>t.price>0).map(t=>({price:t.price,ratio:t.ratio,hit:t.hit,actualExit:t.hit?(t.actualExit||t.price):0}));
+  const d={
+    id:editMode?document.getElementById('editId').value:uid(),
+    date,market:getVal('f_market'),symbol:symbol.toUpperCase(),
+    direction:getVal('f_direction'),setup:getVal('f_setup'),timeframe:getVal('f_timeframe'),
+    tags:[...curTags],
+    entry:getNum('f_entry'),exit:status==='closed'?getNum('f_exit'):0,size:getNum('f_size'),stop:getNum('f_stop'),
+    target:targets.length?targets[0].price:0,account:getNum('f_account'),fees:getNum('f_fees'),leverage:getNum('f_leverage')||1,
+    marginMode:document.getElementById('f_marginMode').checked?'isolated':'cross',
+    targets:targets.length?targets:undefined,
+    trend:getVal('f_trend'),regime:getVal('f_regime'),
+    entryReason:getVal('f_entryReason'),exitReason:status==='closed'?getVal('f_exitReason'):'',
+    status,
+    emotionEntry:getVal('f_emotion_entry'),emotionHold:getVal('f_emotion_hold'),emotionAfter:getVal('f_emotion_after'),
+    emotionNote:getVal('f_emotionNote'),
+    mistakes:getVal('f_mistakes'),lessons:getVal('f_lessons'),redo:getVal('f_redo'),
+    selfScore:{...scores},img:curImg,savedAt:Date.now()
+  };
+  d.eval=evaluate(d);
+  const idx=entries.findIndex(e=>e.id===d.id);
+  if(idx>=0)entries[idx]=d;else entries.unshift(d);
+  persist();
+  editMode=false;curImg='';
+  toast('✓ 已保存 · 综合评分 '+d.eval.score.toFixed(0)+'/100 · 等级 '+d.eval.grade);
+  setTimeout(()=>showDetail(d.id),300);
+}
+
+function resetForm(){
+  document.getElementById('entryForm').reset();
+  document.getElementById('editId').value='';
+  curTags=[];renderTags();
+  scores={};renderScores();
+  curImg='';document.getElementById('imgName').textContent='';
+  editMode=false;document.getElementById('formTitle').textContent='新建交易日志';
+  document.getElementById('f_status').checked=true;
+  document.getElementById('statusLabel').textContent='已平仓';
+  document.getElementById('exitField').style.display='';
+  document.getElementById('exitReasonField').style.display='';
+  targetsData=[];renderTargets();
+  liveCalc();
+}
+
+function toggleStatus(){
+  const checked=document.getElementById('f_status').checked;
+  document.getElementById('statusLabel').textContent=checked?'已平仓':'持仓中';
+  document.getElementById('exitField').style.display=checked?'':'none';
+  document.getElementById('exitReasonField').style.display=checked?'':'none';
+  if(!checked){document.getElementById('f_exit').removeAttribute('required');document.getElementById('f_exit').value=''}
+  else document.getElementById('f_exit').setAttribute('required','');
+  liveCalc();
+}
+
+function renderTargets(){
+  const box=document.getElementById('targetList');
+  if(!box)return;
+  let h='',sum=0;
+  targetsData.forEach((t,i)=>{
+    sum+=Number(t.ratio)||0;
+    h+=`<div class="target-row">
+      <div class="target-head">
+        <span class="target-idx">目标 #${i+1}</span>
+        <button class="target-del" onclick="delTarget(${i})">移除</button>
+      </div>
+      <div class="row" style="gap:10px;margin-bottom:8px">
+        <div class="field" style="margin-bottom:0">
+          <label>目标价</label>
+          <input type="number" step="any" value="${t.price||''}" onchange="targetsData[${i}].price=Number(this.value);renderTargets()" placeholder="69000">
+        </div>
+        <div class="field" style="margin-bottom:0;max-width:90px">
+          <label>比例 %</label>
+          <input type="number" step="1" min="0" max="100" value="${t.ratio||''}" onchange="targetsData[${i}].ratio=Number(this.value);renderTargets()" placeholder="30">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>出场价 <span class="hint">可选</span></label>
+          <input type="number" step="any" value="${t.actualExit||''}" onchange="targetsData[${i}].actualExit=Number(this.value)" placeholder="默认用目标价">
+        </div>
+      </div>
+      <label class="target-check">
+        <input type="checkbox" ${t.hit?'checked':''} onchange="targetsData[${i}].hit=this.checked;renderTargets()">
+        <span>已触发</span>
+      </label>
+    </div>`;
+  });
+  if(sum>0){
+    h+=sum===100
+      ?`<div class="target-sum ok">合计 100% ✓</div>`
+      :`<div class="target-sum warn">合计 ${sum}% · 建议为 100%</div>`;
+  }
+  box.innerHTML=h;
+  liveCalc();
+}
+
+function addTarget(){
+  targetsData.push({price:0,ratio:0,actualExit:0,hit:false});
+  renderTargets();
+}
+
+function delTarget(i){
+  targetsData.splice(i,1);
+  renderTargets();
+}
+
+/* ---------- 仪表盘 ---------- */
+function renderDashboard(){
+  const n=entries.length;
+  const stats=document.getElementById('stats');
+  if(n===0){stats.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="big">📭</div>还没有日志<br>点击右上「+ 新建」开始第一笔，或去「数据管理」载入示范案例</div>';document.getElementById('recentTable').innerHTML='';document.getElementById('equityCurveBox').innerHTML='';return}
+
+  const openTrades=entries.filter(e=>e.status==='open');
+  let sth='';
+  if(openTrades.length){
+    sth+='<div class="card" style="margin-bottom:14px"><div class="section-title" style="margin-top:0">当前持仓</div>';
+    openTrades.forEach(e=>{
+      const fmt=n=>Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:8});
+      sth+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div><b>${e.symbol}</b> <span class="pill ${e.direction}">${e.direction==='long'?'多':'空'}</span></div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="display:flex;gap:16px;font-size:12px">
+            <span>入场 ${fmt(e.entry)}</span>
+            <span>止损 ${fmt(e.stop)}</span>
+            ${e.target?`<span>目标 ${fmt(e.target)}</span>`:''}
+            <span>${e.leverage}x</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn sm" onclick="go('detail');showDetail('${e.id}');setTimeout(()=>{const ni=document.getElementById('newNoteInput');if(ni)ni.focus()},200)" style="font-size:11px">+ 笔记</button>
+            <button class="btn sm" onclick="editEntry('${e.id}')" style="font-size:11px">编辑</button>
+          </div>
+        </div>
+      </div>`;
+    });
+    sth+='</div>';
+  }
+
+  const wins=entries.filter(e=>e.eval.pnl>0);
+  const losses=entries.filter(e=>e.eval.pnl<0);
+  const totPnl=entries.reduce((s,e)=>s+e.eval.pnl,0);
+  const totR=entries.reduce((s,e)=>s+e.eval.rMult,0);
+  const winRate=wins.length/n*100;
+  const avgR=totR/n;
+  const avgScore=entries.reduce((s,e)=>s+e.eval.score,0)/n;
+  const best=entries.reduce((a,b)=>b.eval.rMult>a.eval.rMult?b:a);
+  const worst=entries.reduce((a,b)=>b.eval.rMult<a.eval.rMult?b:a);
+  const cell=(lbl,val,cls,sub)=>`<div class="stat"><div class="lbl">${lbl}</div><div class="val ${cls||''}">${val}</div><div class="sub">${sub||''}</div></div>`;
+  stats.innerHTML=sth+
+    cell('总日志数',n,'blue','笔')+cell('总盈亏',fmt(totPnl),totPnl>=0?'green':'red','所有已记录')+
+    cell('胜率',winRate.toFixed(1)+'%','',wins.length+'胜 / '+losses.length+'负')+
+    cell('平均R',avgR.toFixed(2)+'R',avgR>=0?'green':'red','期望值核心指标')+
+    cell('平均评分',avgScore.toFixed(0),'',avgScore>=70?'green':'')+
+    cell('最佳交易',best.eval.rMult.toFixed(2)+'R','green',best.symbol)+
+    cell('最差交易',worst.eval.rMult.toFixed(2)+'R','red',worst.symbol);
+
+  // 资金曲线
+  const eqBox = document.getElementById('equityCurveBox');
+  if (eqBox) {
+    eqBox.innerHTML = '<div class="card" style="margin-top:16px"><div class="section-title" style="margin-top:0">资金曲线</div><div id="equityCurve" style="width:100%;height:200px;position:relative"></div><div id="equityStats" style="display:flex;gap:20px;font-size:12px;margin-top:8px;color:var(--txt2)"></div></div>';
+  }
+
+  // recent table
+  const top=entries.slice().sort(dateSort).slice(0,8);
+  let h='<thead><tr><th></th><th>日期</th><th>标的</th><th>方向</th><th>策略</th><th>盈亏</th><th>R</th><th>等级</th></tr></thead><tbody>';
+  top.forEach(e=>{
+    const dot=e.status==='open'?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green)"></span>':'';
+    h+=`<tr class="clickable" onclick="showDetail('${e.id}')"><td>${dot}</td><td>${e.date}</td><td>${e.symbol}</td><td><span class="pill ${e.direction}">${e.direction==='long'?'多':'空'}</span></td><td>${e.setup}</td><td class="num" style="color:${e.eval.pnl>=0?'var(--green)':'var(--red)'}">${fmt(e.eval.pnl)}</td><td class="num">${e.eval.rMult.toFixed(2)}R</td><td><span class="grade ${e.eval.grade}">${e.eval.grade}</span></td></tr>`;
+  });
+  h+='</tbody>';
+  document.getElementById('recentTable').innerHTML=h;
+  renderEquityCurve();
+}
+
+function fmtY(v){return Math.abs(v)>=1000?(v/1000).toFixed(0)+'k':v.toFixed(0)}
+
+function renderEquityCurve(){
+  const closed=entries.filter(e=>e.status!=='open'||!e.status).sort((a,b)=>a.date>b.date?1:-1);
+  const el=document.getElementById('equityCurve');
+  if(!el)return;
+  if(closed.length<3){
+    el.innerHTML='<div class="empty" style="padding:30px">至少需要 3 笔已平仓交易才能绘制曲线</div>';
+    return;
+  }
+  const cum=[0];
+  closed.forEach(e=>cum.push(cum[cum.length-1]+e.eval.pnl));
+  const n=cum.length;
+  const maxVal=Math.max(...cum);
+  const minVal=Math.min(...cum);
+  const range=Math.max(Math.abs(maxVal),Math.abs(minVal),1);
+
+  const W=800,H=200,padLeft=50,padRight=20,padTop=10,padBottom=25;
+  const plotW=W-padLeft-padRight;
+  const plotH=H-padTop-padBottom;
+
+  const x=i=>padLeft+(i/(n-1))*plotW;
+  const y=v=>padTop+(1-(v+range)/(2*range))*plotH;
+
+  const points=cum.map((v,i)=>`${x(i)},${y(v)}`).join(' ');
+  const zeroY=y(0);
+  const areaPoints=`${x(0)},${zeroY} ${points} ${x(n-1)},${zeroY}`;
+
+  const totalPnl=cum[cum.length-1];
+  const peak=Math.max(...cum);
+  const drawdown=peak>0?((peak-Math.min(...cum.slice(cum.indexOf(peak))))/peak*100).toFixed(1):'0';
+  const winCount=closed.filter(e=>e.eval.pnl>0).length;
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:200px">`;
+  // grid lines
+  for(let i=0;i<=4;i++){
+    const yy=padTop+(i/4)*plotH;
+    svg+=`<line x1="${padLeft}" y1="${yy}" x2="${W-padRight}" y2="${yy}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="4 3"/>`;
+  }
+  // zero line
+  svg+=`<line x1="${padLeft}" y1="${zeroY}" x2="${W-padRight}" y2="${zeroY}" stroke="var(--txt3)" stroke-width="1"/>`;
+  // fill area
+  svg+=`<polygon points="${areaPoints}" fill="${totalPnl>=0?'rgba(63,185,80,0.08)':'rgba(248,81,73,0.08)'}"/>`;
+  // polyline
+  svg+=`<polyline points="${points}" fill="none" stroke="${totalPnl>=0?'var(--green)':'var(--red)'}" stroke-width="2" stroke-linejoin="round"/>`;
+  // endpoint dot
+  svg+=`<circle cx="${x(n-1)}" cy="${y(cum[n-1])}" r="4" fill="${totalPnl>=0?'var(--green)':'var(--red)'}"/>`;
+  // X-axis labels
+  const step=Math.max(1,Math.floor(n/6));
+  for(let i=0;i<n;i++){
+    if(i%step===0||i===n-1){
+      svg+=`<text x="${x(i)}" y="${H-5}" text-anchor="middle" fill="var(--txt3)" font-size="10">${i===0?'起始':closed[i-1]?.date?.slice(5)}</text>`;
+    }
+  }
+  // Y-axis labels
+  svg+=`<text x="${padLeft-5}" y="${padTop+5}" text-anchor="end" fill="var(--txt3)" font-size="10">${fmtY(range)}</text>`;
+  svg+=`<text x="${padLeft-5}" y="${y(0)+4}" text-anchor="end" fill="var(--txt3)" font-size="10">0</text>`;
+  svg+=`<text x="${padLeft-5}" y="${H-padBottom}" text-anchor="end" fill="var(--txt3)" font-size="10">${fmtY(-range)}</text>`;
+  svg+='</svg>';
+
+  el.innerHTML=svg;
+  document.getElementById('equityStats').innerHTML=
+    `<span>累计盈亏 <b style="color:${totalPnl>=0?'var(--green)':'var(--red)'}">${fmt(totalPnl)}</b></span>`+
+    `<span>最大回撤 <b style="color:var(--red)">${drawdown}%</b></span>`+
+    `<span>已平仓 <b>${closed.length}</b> 笔</span>`+
+    `<span>胜率 <b>${(winCount/closed.length*100).toFixed(0)}%</b></span>`;
+}
+
+/* ---------- 列表 ---------- */
+function renderList(){
+  const fm=document.getElementById('filterMarket').value;
+  const fr=document.getElementById('filterResult').value;
+  const fs=(document.getElementById('filterSearch').value||'').toLowerCase();
+  let list=entries.filter(e=>{
+    if(fm&&e.market!==fm)return false;
+    if(fr==='win'&&e.eval.pnl<=0)return false;
+    if(fr==='loss'&&e.eval.pnl>=0)return false;
+    if(fr==='be'&&e.eval.pnl!==0)return false;
+    if(fs&&![e.symbol,e.setup,...e.tags].join(' ').toLowerCase().includes(fs))return false;
+    return true;
+  }).sort(dateSort);
+  const t=document.getElementById('listTable');
+  if(list.length===0){t.innerHTML='<tbody><tr><td><div class="empty"><div class="big">🔍</div>没有匹配的日志</div></td></tr></tbody>';return}
+  let h='<thead><tr><th>日期</th><th>标的</th><th>市场</th><th>方向</th><th>策略</th><th>盈亏</th><th>R倍数</th><th>风险%</th><th>评分</th><th>等级</th></tr></thead><tbody>';
+  list.forEach(e=>{
+    const rc=e.eval.pnl>=0?'win':'loss';
+    const statusBadge=e.status==='open'?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:4px"></span>':'';
+    h+=`<tr class="clickable" onclick="showDetail('${e.id}')"><td>${e.date}</td><td>${statusBadge}<b>${e.symbol}</b></td><td>${mkLabel(e.market)}</td><td><span class="pill ${e.direction}">${e.direction==='long'?'多':'空'}</span></td><td>${e.setup}</td><td class="num" style="color:${e.eval.pnl>=0?'var(--green)':'var(--red)'}">${fmt(e.eval.pnl)}</td><td class="num">${e.eval.rMult.toFixed(2)}R</td><td class="num">${e.eval.riskPct.toFixed(1)}%</td><td class="num">${e.eval.score.toFixed(0)}</td><td><span class="grade ${e.eval.grade}">${e.eval.grade}</span></td></tr>`;
+  });
+  h+='</tbody>';
+  t.innerHTML=h;
+}
+function mkLabel(m){return{spot:'现货',perp:'U本位',coinm:'币本位'}[m]||m}
+
+/* ---------- 详情 ---------- */
+function showDetail(id){
+  const e=entries.find(x=>x.id===id);if(!e)return;
+  go('detail');
+  document.getElementById('dTitle').textContent=e.symbol+' · '+e.date;
+  document.getElementById('dSub').textContent=`${mkLabel(e.market)} · ${e.direction==='long'?'做多':'做空'} · ${e.setup} · ${e.timeframe}`;
+  document.getElementById('dEdit').onclick=()=>editEntry(id);
+  document.getElementById('dDel').onclick=()=>{if(confirm('确定删除这笔日志？不可恢复')){entries=entries.filter(x=>x.id!==id);persist();toast('已删除');go('list')}};
+
+  const ev=e.eval;
+  const rc=ev.pnl>=0?'green':'red';
+  let h='<div class="detail-grid">';
+
+  // 左：参数
+  h+='<div class="card"><div class="section-title">交易参数</div>';
+  if(e.status==='open')h+='<div style="color:var(--green);font-size:13px;margin-bottom:8px">⏳ 持仓中</div>';
+  else h+='<div style="color:var(--txt2);font-size:13px;margin-bottom:8px">✓ 已平仓</div>';
+  h+=kv('方向',`<span class="pill ${e.direction}">${e.direction==='long'?'做多':'做空'}</span>`);
+  h+=kv('入场价',e.entry);
+  h+=kv('出场价',e.status==='open'?'—':e.exit);
+  h+=kv('仓位数量',e.size);
+  h+=kv('止损价',e.stop);
+  if(e.targets&&e.targets.length){
+    let th='<div style="display:flex;flex-direction:column;gap:3px;margin-top:2px">';
+    e.targets.forEach((t,i)=>{
+      const hitTag=t.hit?`<span style="color:var(--green);font-size:11px">已触发`+(t.actualExit>0?`@${fmt(t.actualExit)}`:'')+'</span>':'<span style="color:var(--txt3);font-size:11px">未触发</span>';
+      th+=`<div style="font-size:12px;color:var(--txt2)">${i+1}. ${fmt(t.price)} · 平 ${t.ratio}% · ${hitTag}</div>`;
+    });
+    th+='</div>';
+    h+=`<div class="kv"><span class="k">止盈目标</span><span class="v">${th}</span></div>`;
+  }else if(e.target){
+    h+=kv('止盈目标',e.target);
+  }
+  h+=kv('手续费',fmt(e.fees||0));
+  h+=kv('账户资金',fmt(e.account));
+  h+='</div>';
+
+  // 右：自动评测
+  if(e.status==='open'){
+    h+='<div class="eval-box" style="display:flex;align-items:center;justify-content:center;min-height:120px"><div style="text-align:center;color:var(--txt2);font-size:13px">持仓中，平仓后自动计算评测</div></div>';
+  }else{
+    h+='<div class="eval-box"><div class="eval-head"><div class="grade '+ev.grade+' g">'+ev.grade+'</div><div class="info"><div class="t">综合评分 '+ev.score.toFixed(0)+'/100</div><div class="s">'+ev.gradeText+'</div></div></div>';
+    h+='<div class="meter"><div class="top"><span class="l">盈亏 P&L</span><span class="v" style="color:'+rc+'">'+fmt(ev.pnl)+'</span></div><div class="bar"><div class="fill" style="width:'+Math.min(100,Math.abs(ev.rMult)/3*100)+'%;background:'+rc+'"></div></div></div>';
+    h+='<div class="meter"><div class="top"><span class="l">R倍数</span><span class="v">'+ev.rMult.toFixed(2)+'R</span></div><div class="bar"><div class="fill" style="width:'+Math.min(100,Math.abs(ev.rMult)/3*100)+'%;background:'+(ev.rMult>=0?'var(--green)':'var(--red)')+'"></div></div></div>';
+    h+='<div class="meter"><div class="top"><span class="l">单笔风险占比</span><span class="v" style="color:'+(ev.riskPct<=2?'var(--green)':ev.riskPct<=5?'var(--yellow)':'var(--red)')+'">'+ev.riskPct.toFixed(2)+'%</span></div><div class="bar"><div class="fill" style="width:'+Math.min(100,ev.riskPct/5*100)+'%;background:'+(ev.riskPct<=2?'var(--green)':ev.riskPct<=5?'var(--yellow)':'var(--red)')+'"></div></div></div>';
+    if(ev.planRR)h+='<div class="meter"><div class="top"><span class="l">计划盈亏比</span><span class="v">1:'+ev.planRR.toFixed(1)+'</span></div></div>';
+    h+='<div class="meter"><div class="top"><span class="l">自评均分</span><span class="v">'+ev.selfAvg.toFixed(1)+'/5</span></div><div class="bar"><div class="fill" style="width:'+ev.selfAvg/5*100+'%;background:var(--blue)"></div></div></div>';
+    h+='</div>';
+  }
+
+  h+='</div>'; // end grid
+
+  // 评测总结
+  if(e.status!=='open'){
+  h+='<div class="card" style="margin-top:16px"><div class="section-title">🎯 自动评测总结</div>';
+  h+=`<div class="feedback ${ev.issues.length>=2?'bad':ev.warns.length?'warn':'good'}" style="margin-bottom:14px">${ev.summary}</div>`;
+  if(ev.goods.length){h+='<div class="feedback good"><b>✓ 做得好的：</b><ul>'+ev.goods.map(g=>'<li>'+g+'</li>').join('')+'</ul></div>'}
+  if(ev.warns.length){h+='<div class="feedback warn"><b>⚠ 可优化：</b><ul>'+ev.warns.map(g=>'<li>'+g+'</li>').join('')+'</ul></div>'}
+  if(ev.issues.length){h+='<div class="feedback bad"><b>✗ 严重问题：</b><ul>'+ev.issues.map(g=>'<li>'+g+'</li>').join('')+'</ul></div>'}
+  h+='</div>';
+  }
+
+  // 持仓笔记
+  h+='<div class="card" style="margin-top:16px"><div class="section-title">持仓笔记</div>';
+  h+='<div id="notesList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>';
+  h+='<div style="display:flex;gap:8px"><input type="text" id="newNoteInput" placeholder="添加笔记...（如：止损移至成本价、减仓 50%）" style="flex:1;background:var(--bg);color:var(--txt);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px" onkeydown="if(event.key===\'Enter\')addNote(\''+id+'\')"><button class="btn sm primary" onclick="addNote(\''+id+'\')">添加笔记</button></div>';
+  h+='</div>';
+
+  // 文本块
+  h+='<div class="card" style="margin-top:16px"><div class="section-title">复盘记录</div>';
+  h+=block('入场逻辑',e.entryReason);
+  if(e.exitReason)h+=block('出场逻辑',e.exitReason);
+  h+=block('大趋势 / 环境',e.trend+' · '+e.regime);
+  h+=block('进场 / 持仓 / 平仓后情绪',e.emotionEntry+' / '+e.emotionHold+' / '+e.emotionAfter+(e.emotionNote?`\n${e.emotionNote}`:''));
+  if(e.mistakes)h+=block('犯的错',e.mistakes);
+  h+=block('学到的',e.lessons);
+  if(e.redo)h+=block('如果重来',e.redo);
+  if(e.tags&&e.tags.length)h+=`<div class="block"><div class="bt">标签</div><div class="tag-list">${e.tags.map(t=>'<span class="t">'+t+'</span>').join('')}</div></div>`;
+  h+='</div>';
+
+  if(e.img)h+=`<div class="card" style="margin-top:16px"><div class="section-title">附图</div><img src="${e.img}" style="max-width:100%;border-radius:8px"></div>`;
+
+  document.getElementById('detailBody').innerHTML=h;
+  renderNotes(id);
+}
+/* ---------- 持仓笔记 ---------- */
+function renderNotes(entryId){
+  const e=entries.find(x=>x.id===entryId);if(!e)return;
+  if(!e.notes)e.notes=[];
+  const list=document.getElementById('notesList');if(!list)return;
+  let h='';
+  for(let i=e.notes.length-1;i>=0;i--){
+    const n=e.notes[i];
+    h+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:11px;color:var(--txt3);margin-bottom:2px">${new Date(n.time).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+        <div>${escapeHtml(n.text)}</div>
+      </div>
+      <button class="btn sm" onclick="delNote('${entryId}',${i})" style="color:var(--red);font-size:11px">×</button>
+    </div>`;
+  }
+  list.innerHTML=h||'<div style="font-size:12px;color:var(--txt3)">暂无笔记</div>';
+}
+function addNote(entryId){
+  const input=document.getElementById('newNoteInput');if(!input)return;
+  const val=input.value.trim();if(!val)return;
+  const e=entries.find(x=>x.id===entryId);if(!e)return;
+  if(!e.notes)e.notes=[];
+  e.notes.push({time:Date.now(),text:val});
+  persist();
+  renderNotes(entryId);
+  input.value='';input.focus();
+}
+function delNote(entryId,idx){
+  const e=entries.find(x=>x.id===entryId);if(!e)return;
+  e.notes.splice(idx,1);
+  persist();
+  renderNotes(entryId);
+}
+function kv(k,v){return`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`}
+function block(t,b){return`<div class="block"><div class="bt">${t}</div><div class="bb">${escapeHtml(b)||'—'}</div></div>`}
+function escapeHtml(s){return(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+
+/* ---------- 编辑 ---------- */
+function editEntry(id){
+  const e=entries.find(x=>x.id===id);if(!e)return;
+  editMode=true;
+  document.getElementById('formTitle').textContent='编辑：'+e.symbol+' · '+e.date;
+  document.getElementById('editId').value=e.id;
+  setVal('f_date',e.date);setVal('f_market',e.market);setVal('f_symbol',e.symbol);
+  setVal('f_direction',e.direction);setVal('f_setup',e.setup);setVal('f_timeframe',e.timeframe);
+  curTags=[...e.tags];renderTags();
+  setNum('f_entry',e.entry);setNum('f_exit',e.exit);setNum('f_size',e.size);setNum('f_stop',e.stop);
+  setNum('f_account',e.account);setNum('f_fees',e.fees);
+  // 恢复目标位
+  if(e.targets&&e.targets.length){targetsData=e.targets.map(t=>({price:t.price,ratio:t.ratio,actualExit:t.actualExit||0,hit:t.hit}));}
+  else if(e.target){targetsData=[{price:e.target,ratio:100,actualExit:0,hit:false}];}
+  else{targetsData=[];}
+  renderTargets();
+  setVal('f_trend',e.trend);setVal('f_regime',e.regime);
+  setVal('f_entryReason',e.entryReason);setVal('f_exitReason',e.exitReason);
+  setVal('f_emotion_entry',e.emotionEntry);setVal('f_emotion_hold',e.emotionHold);setVal('f_emotion_after',e.emotionAfter);
+  setNum('f_leverage',e.leverage||1);
+  const mm=e.marginMode||'isolated';document.getElementById('f_marginMode').checked=mm==='isolated';
+  setVal('f_emotionNote',e.emotionNote);setVal('f_mistakes',e.mistakes);
+  setVal('f_lessons',e.lessons);setVal('f_redo',e.redo);
+  scores={...e.selfScore};renderScores();
+  curImg=e.img||'';document.getElementById('imgName').textContent=curImg?'已有附图':'';
+  // 恢复交易状态
+  const isClosed=e.status!=='open';
+  document.getElementById('f_status').checked=isClosed;
+  document.getElementById('statusLabel').textContent=isClosed?'已平仓':'持仓中';
+  document.getElementById('exitField').style.display=isClosed?'':'none';
+  document.getElementById('exitReasonField').style.display=isClosed?'':'none';
+  if(!isClosed)document.getElementById('f_exit').removeAttribute('required');
+  else document.getElementById('f_exit').setAttribute('required','');
+  go('new');liveCalc();
+}
+function setVal(id,v){const el=document.getElementById(id);if(el&&v!=null)el.value=v}
+function setNum(id,v){const el=document.getElementById(id);if(el&&v!=null)el.value=v}
+
+/* ---------- 进出口 ---------- */
+function exportData(){
+  const blob=new Blob([JSON.stringify(entries,null,2)],{type:'application/json'});
+  download(blob,`trading-journal-${today()}.json`);
+  toast('已导出 '+entries.length+' 笔');
+}
+function exportCSV(){
+  const rows=[['日期','市场','标的','方向','策略','周期','入场','出场','仓位','止损','止盈','手续费','账户','盈亏','R倍数','风险%','评分','等级','标签','学到的']];
+  entries.forEach(e=>{rows.push([e.date,e.market,e.symbol,e.direction,e.setup,e.timeframe,e.entry,e.exit,e.size,e.stop,e.target,e.fees,e.account,e.eval.pnl.toFixed(2),e.eval.rMult.toFixed(2),e.eval.riskPct.toFixed(2),e.eval.score.toFixed(0),e.eval.grade,e.tags.join('|'),(e.lessons||'').replace(/\n/g,' ')])});
+  const csv='\uFEFF'+rows.map(r=>r.map(c=>`"${(c??'')}"`).join(',')).join('\n');
+  download(new Blob([csv],{type:'text/csv'}),`trading-journal-${today()}.csv`);
+  toast('CSV 已导出');
+}
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
+function importData(e){
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const arr=JSON.parse(r.result);let c=0;
+    arr.forEach(it=>{if(!entries.find(x=>x.id===it.id)){entries.push(it);c++}});
+    persist();toast('已导入 '+c+' 笔');go('dashboard');
+  }catch(err){toast('文件格式错误')}};
+  r.readAsText(f);
+}
+function clearAll(){if(!confirm('确定清空全部日志？此操作不可恢复，请先导出备份！'))return;if(!confirm('再次确认：全部删除？'))return;entries=[];persist();toast('已清空');go('dashboard')}
+
+/* ---------- 开仓必看清单（分组）+ 震荡幅度计算器 ---------- */
+const CHK_KEY='tj_checklist_v2';
+let checklist=[];
+let chkEditing=null;
+const CHK_GROUPS=[
+  {cat:'long',title:'📈 开多必看',color:'var(--green)',badge:'#3fb950'},
+  {cat:'short',title:'📉 开空必看',color:'var(--red)',badge:'#f85149'},
+  {cat:'general',title:'⊙ 通用必看',color:'var(--blue)',badge:'#58a6ff'}
+];
+const DEFAULT_CHECKLIST=[
+  {cat:'long',text:'开多：先算当天最低点 + 平时涨幅（6-15%），再去挂限价单（不要追高市价进）'},
+  {cat:'short',text:'开空：先算当天最高点 + 平时涨幅（6-15%），再去挂限价单（不要追空市价进）'},
+  {cat:'general',text:'卖的时候看 RSI 是否已在高位（不是低位）——高位才考虑减仓/平多'},
+  {cat:'general',text:'买的时候看 RSI 在高位还是低位——低位买更安全，高位追风险大'},
+  {cat:'general',text:'最低用 4H 图定多空方向；1H 图只用来找精确进场价，不用于定方向'}
+];
+function renderChecklist(){
+  const box=document.getElementById('checklistBox');
+  if(!box)return;
+  if(checklist.length===0){box.innerHTML='<div class="empty" style="padding:18px">还没有条目，点下方按钮添加</div>';return}
+  let html='';
+  CHK_GROUPS.forEach(g=>{
+    const items=checklist.filter(c=>c.cat===g.cat);
+    if(items.length===0)return;
+    html+=`<div class="chk-group" style="border-left-color:${g.color}">
+      <div class="chk-gtitle" style="color:${g.color}">${g.title} <span class="cnt">${items.length}</span></div>`;
+    items.forEach((it,idx)=>{
+      if(chkEditing===it.id){
+        html+=`<div class="chk-item edit">
+          <div class="chk-idx" style="background:${g.badge}">${idx+1}</div>
+          <textarea class="chk-edit" id="chk-edit-${it.id}">${escapeHtml(it.text)}</textarea>
+          <div class="chk-acts"><button class="btn sm primary" onclick="saveChecklistItem('${it.id}')">保存</button><button class="btn sm" onclick="cancelChkEdit()">取消</button></div>
+        </div>`;
+      }else{
+        html+=`<div class="chk-item">
+          <div class="chk-idx" style="background:${g.badge}">${idx+1}</div>
+          <div class="chk-txt">${escapeHtml(it.text)}</div>
+          <div class="chk-acts"><button class="btn sm" onclick="editChecklistItem('${it.id}')">✎</button><button class="btn sm danger" onclick="delChecklistItem('${it.id}')">×</button></div>
+        </div>`;
+      }
+    });
+    html+='</div>';
+  });
+  // 无分类的孤儿条目归到通用
+  const orphans=checklist.filter(c=>!CHK_GROUPS.some(g=>g.cat===c.cat));
+  if(orphans.length){html+=`<div class="chk-group"><div class="chk-gtitle">其他</div>`+orphans.map((it,idx)=>`<div class="chk-item"><div class="chk-idx">${idx+1}</div><div class="chk-txt">${escapeHtml(it.text)}</div></div>`).join('')+'</div>'}
+  box.innerHTML=html;
+}
+function addChecklistItem(cat){const id='c'+Date.now();checklist.push({id,cat:cat||'general',text:'新条目（点✎编辑写入你的规则）'});saveChecklist();chkEditing=id;renderChecklist();const el=document.getElementById('chk-edit-'+id);if(el)el.focus()}
+function editChecklistItem(id){chkEditing=id;renderChecklist();const el=document.getElementById('chk-edit-'+id);if(el)el.focus()}
+function cancelChkEdit(){chkEditing=null;renderChecklist()}
+function saveChecklistItem(id){const el=document.getElementById('chk-edit-'+id);if(!el)return;const v=el.value.trim();const it=checklist.find(c=>c.id===id);if(it&&v){it.text=v;saveChecklist();toast('已保存')}else if(it&&!v){toast('内容不能为空')}chkEditing=null;renderChecklist()}
+function delChecklistItem(id){if(!confirm('删除这条？'))return;checklist=checklist.filter(c=>c.id!==id);saveChecklist();renderChecklist();toast('已删除')}
+function resetChecklistToDefault(){if(!confirm('恢复为默认条目？当前自定义条目会被覆盖'))return;checklist=DEFAULT_CHECKLIST.map((t,i)=>({id:'c'+Date.now()+i,cat:t.cat,text:t.text}));saveChecklist();chkEditing=null;renderChecklist();toast('已恢复默认')}
+
+/* 震荡幅度计算器：输入现价 → 输出 6-15% 回调买/反弹卖挂单区间 */
+function priceFmt(n){if(!n||isNaN(n))return'—';if(n>=1000)return n.toLocaleString();if(n>=1)return n.toFixed(2);if(n>=0.01)return n.toFixed(4);return n.toFixed(6)}
+function calcSwing(){
+  const p=getNum('swingPrice');
+  const out=document.getElementById('swingOut');
+  if(!out)return;
+  if(!p){out.innerHTML='<div class="calc-hint">请输入现价后点击计算</div>';return}
+  let html='<table class="swing-tbl"><tr><th>幅度</th><th class="num">金额</th><th class="num">上涨后</th><th class="num">下跌后</th></tr>';
+  for(let i=1;i<=20;i++){
+    const amount=p*i/100;
+    html+=`<tr><td style="font-family:var(--mono)">${i}%</td><td class="num" style="font-family:var(--mono);color:var(--txt);font-weight:600">${priceFmt(amount)}</td><td class="num" style="font-family:var(--mono);font-weight:600;color:var(--green)">${priceFmt(p+amount)}</td><td class="num" style="font-family:var(--mono);font-weight:600;color:var(--red)">${priceFmt(p-amount)}</td></tr>`;
+  }
+  html+='</table>';
+  out.innerHTML=html;
+}
+document.getElementById('swingPrice').addEventListener('keydown',e=>{if(e.key==='Enter')calcSwing();});
+document.getElementById('pctBase').addEventListener('keydown',e=>{if(e.key==='Enter')calcPct();});
+
+function calcPosition(){
+  const ac=parseFloat(document.getElementById('posAccount').value);
+  const risk=parseFloat(document.getElementById('posRisk').value)||2;
+  const entry=parseFloat(document.getElementById('posEntry').value);
+  const stop=parseFloat(document.getElementById('posStop').value);
+  const L=Math.max(1,parseInt(document.getElementById('posLeverage').value)||1);
+  const out=document.getElementById('posOut');
+  if(!ac||!entry||!stop){
+    out.innerHTML='<div class="calc-hint">填写账户资金、入场价、止损价后自动计算应开仓位</div>';
+    return;
+  }
+  if(entry===stop){
+    out.innerHTML='<div class="calc-hint" style="color:var(--red)">入场价与止损价不能相同</div>';
+    return;
+  }
+  const riskAmt=ac*risk/100;
+  const size=riskAmt/Math.abs(entry-stop);
+  const margin=size*entry/L;
+  const marginRatio=ac>0?margin/ac*100:0;
+
+  let html='<table class="swing-tbl"><tr><th>参数</th><th class="num">数值</th><th>说明</th></tr>';
+  html+=`<tr><td>止损距离</td><td class="num" style="font-family:var(--mono);font-weight:600">${Math.abs(entry-stop).toFixed(2)}</td><td>入场与止损价差</td></tr>`;
+  html+=`<tr><td>风险金额</td><td class="num" style="font-family:var(--mono);font-weight:600;color:var(--red)">${fmt(riskAmt)}</td><td>${risk}% × ${fmt(ac)}</td></tr>`;
+  html+=`<tr><td>应开数量</td><td class="num" style="font-family:var(--mono);font-weight:600;color:var(--blue)">${size.toFixed(4)}</td><td>张/币/股</td></tr>`;
+  html+=`<tr><td>仓位价值</td><td class="num" style="font-family:var(--mono);font-weight:600">${fmt(size*entry)}</td><td>${L>1?L+'x 杠杆':''}</td></tr>`;
+  if(L>1){
+    html+=`<tr><td>所需保证金</td><td class="num" style="font-family:var(--mono);font-weight:600">${fmt(margin)}</td><td>占总资金 ${marginRatio.toFixed(1)}%</td></tr>`;
+  }
+  html+='</table>';
+
+  if(marginRatio>50){
+    html+='<div class="calc-warn" style="margin-top:8px"><div class="w-red">所需保证金占账户 '+marginRatio.toFixed(0)+'%，过高——降低杠杆或减少风险比例</div></div>';
+  }
+
+  out.innerHTML=html;
+}
+
+['posAccount','posRisk','posEntry','posStop','posLeverage'].forEach(id=>{
+  document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')calcPosition();});
+});
+
+/* ---------- 工具箱：斐波那契回撤 ---------- */
+const FIB_RATIOS=[0,0.236,0.382,0.5,0.618,0.786,1];
+const FIB_LABELS={0:'0%',0.236:'23.6%',0.382:'38.2%',0.5:'50%',0.618:'61.8%',0.786:'78.6%',1:'100%'};
+function calcFib(){
+  const high=parseFloat(document.getElementById('fibHigh').value);
+  const low=parseFloat(document.getElementById('fibLow').value);
+  const out=document.getElementById('fibOut');
+  if(!out)return;
+  if(isNaN(high)||isNaN(low)){out.innerHTML='<div class="calc-hint">请输入高点与低点后点击计算</div>';return}
+  if(high===low){out.innerHTML='<div class="calc-hint">高点与低点不能相同</div>';return}
+  const range=high-low;
+  const diff=Math.abs(range);
+  const row=(r,isLong)=>{
+    const price=isLong?high-range*r:low+range*r;
+    const color=r===0.618?'var(--yellow)':r===0.5?'var(--blue)':'var(--txt)';
+    return `<tr style="${r===0.618?'background:rgba(210,153,34,.08)':''}"><td>${FIB_LABELS[r]}</td><td class="num" style="font-family:var(--mono);font-weight:600;color:${color}">${priceFmt(price)}</td></tr>`;
+  };
+  const tbl=(title,isLong)=>`
+    <table class="swing-tbl">
+      <tr><th colspan="2" style="color:${isLong?'var(--green)':'var(--red)'};font-size:12px">${title}</th></tr>
+      <tr><th>比例</th><th class="num">价格</th></tr>
+      ${FIB_RATIOS.map(r=>row(r,isLong)).join('')}
+    </table>`;
+  let html=`<div class="calc-hint" style="margin-bottom:10px">高低点差价：<b style="font-family:var(--mono);color:var(--blue)">${priceFmt(diff)}</b></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+${tbl('📈 做多回撤（支撑位）', true)}
+${tbl('📉 做空回撤（阻力位）', false)}
+</div>`;
+  out.innerHTML=html;
+}
+
+/* ---------- 工具箱：百分比计算 ---------- */
+function calcPct(){
+  const base=parseFloat(document.getElementById('pctBase').value);
+  const pct=parseFloat(document.getElementById('pctVal').value);
+  const out=document.getElementById('pctOut');
+  if(!out)return;
+  if(isNaN(base)){out.innerHTML='<div class="calc-hint">请输入基础价格后点击计算</div>';return}
+  if(!isNaN(pct)){
+    const amount=base*pct/100;
+    let html='<table class="swing-tbl"><tr><th>比例</th><th class="num">金额</th><th class="num">上涨后</th><th class="num">下跌后</th></tr>';
+    html+=`<tr><td style="font-family:var(--mono)">${pct}%</td><td class="num" style="font-family:var(--mono);font-weight:600">${priceFmt(amount)}</td><td class="num" style="font-family:var(--mono);font-weight:600;color:var(--green)">${priceFmt(base+amount)}</td><td class="num" style="font-family:var(--mono);font-weight:600;color:var(--red)">${priceFmt(base-amount)}</td></tr>`;
+    html+='</table>';
+    out.innerHTML=html;
+  } else {
+    let html='<table class="swing-tbl"><tr><th>比例</th><th class="num">金额</th><th class="num">上涨后</th><th class="num">下跌后</th></tr>';
+    for(let i=1;i<=30;i++){
+      const amount=base*i/100;
+      html+=`<tr><td style="font-family:var(--mono)">${i}%</td><td class="num" style="font-family:var(--mono);font-weight:600">${priceFmt(amount)}</td><td class="num" style="font-family:var(--mono);font-weight:600;color:var(--green)">${priceFmt(base+amount)}</td><td class="num" style="font-family:var(--mono);font-weight:600;color:var(--red)">${priceFmt(base-amount)}</td></tr>`;
+    }
+    html+='</table>';
+    out.innerHTML=html;
+  }
+}
+
+/* ---------- 样例 ---------- */
+function loadSample(){
+  const samples=[sampleEntry(),sampleDEXE()];
+  samples.forEach(s=>{const idx=entries.findIndex(e=>e.id===s.id);if(idx>=0)entries[idx]=s;else entries.unshift(s)});
+  persist();toast('已载入 '+samples.length+' 个示范案例（好/坏对比）');showDetail(samples[1].id);
+}
+
+/* ---------- 指标参考（币圈 K 线实战手册） ---------- */
+const INDICATORS=[
+{cat:'趋势类',color:'var(--blue)',items:[
+  {nm:'均线系统',ab:'MA / EMA',what:'把一段时间平均价格连成线，反映趋势方向与市场成本。币圈最常用 7/25/99 MA（经典三线）与 21/55/200 EMA。EMA 比 MA 更贴近现价、反应快。',
+   how:'均线多头排列（短期在上、长期在下）=多头；空头排列反之。价格站上均线=多头，跌破=空头。斜率走平=震荡，斜率向上=多头加速。',
+   long:'7MA 上穿 25MA（币圈金叉）；价格回踩 EMA21 不破；站上 99MA 且均线向上发散。',
+   short:'7MA 下穿 25MA（死叉）；价格反弹 EMA21 受阻；跌破 99MA 且均线向下发散。',
+   tip:'200EMA 是币圈牛熊分水岭，站上才视为多头市场。趋势中 EMA21 是最常用的加仓/止盈参考线（4H 最准）。均线斜率比位置更重要——走平的均线别追，那是震荡。',
+   trap:'震荡市均线反复缠绕，金叉死叉反复打脸，这时别用均线。单根金叉不可信，要量能+结构共振。'},
+  {nm:'MACD',ab:'Moving Average Convergence',what:'由 DIF（快线）、DEA（慢线）、柱状图组成，反映趋势动能与方向。',
+   how:'0 轴上方=多头区域，下方=空头。金叉（快穿慢）看多，死叉看空。柱状图放大=动能增强，缩量=动能衰减。',
+   long:'0 轴上方金叉；柱状由负转正且放大；价格底背离（DIF 不创新低而价格创新低）。',
+   short:'0 轴下方死叉；柱状由正转负且放大；价格顶背离（DIF 不创新高而价格创新高）。',
+   tip:'币圈 MACD 在 4H/日线最准，15m 以下噪音大。顶背离比底背离可靠得多（币圈做空信号质量高）。柱状图背离往往比 DIF 背离更早出现，是领先信号。零轴上方的金叉 > 零轴下方的金叉。',
+   trap:'强单边趋势中 MACD 长期钝化，看似背离实则继续走，叫"假背离"。背离是区域不是点，不要测顶抄底，等结构确认。'},
+  {nm:'趋势线 & 通道',ab:'Trendline / Channel',what:'连接两个以上抬高的低点画上升趋势线，连接降低的高点画下降趋势线。平行的轨道形成通道。',
+   how:'触点越多越有效。突破趋势线=趋势可能反转。通道内高抛低吸，突破通道追击。',
+   long:'上升趋势线回踩不破买入；突破下降趋势线追多。',
+   short:'下降趋势线反弹受阻做空；跌破上升趋势线追空。',
+   tip:'币圈趋势线斜率 45 度左右最健康，过陡（>60°）难持续会回踩，过缓（<30°）动能弱。突破后常有回踩趋势线（变支撑/阻力）的确认动作，是更安全的进点。',
+   trap:'画法主观，不同人画法不同。震荡市趋势线失效。币圈插针常假突破趋势线，等 4H 收盘确认。'},
+  {nm:'价格结构',ab:'Support / Resistance',what:'价格运行的关键价位。支撑=买盘集中区，阻力=卖盘集中区。高低点抬高=上升，降低=下降。',
+   how:'前高前低、密集成交区、整数关口（BTC 6万/7万）、均线、斐波位都是关键位。突破阻力变支撑，跌破支撑变阻力（角色互换）。',
+   long:'突破阻力→回踩阻力（变支撑）不破买入；下降趋势中突破前高。',
+   short:'跌破支撑→反弹支撑（变阻力）不破做空；上升趋势中跌破前低。',
+   tip:'关键位叠加越多越强（如前高+斐波0.618+均线共振）。突破后回踩确认的进点胜率最高，叫"突破-回踩-确认"。双顶双底是经典反转结构，颈线突破确认。',
+   trap:'币圈假突破（插针扫止损）是常态，尤其 15m/1H 级别。看 4H 收盘价突破才算数。整数关口心理作用强但不是真阻力。'}
+]},
+{cat:'震荡 / 动量类',color:'var(--purple)',items:[
+  {nm:'RSI',ab:'Relative Strength Index',what:'0-100 衡量买卖力道，默认 14 周期。>70 超买，<30 超卖。',
+   how:'50 是多空分界。背离（价创新高 RSI 不创新高=顶背离）是反转领先信号。三重顶/底比双重更可靠。',
+   long:'RSI<30 超卖区拐头向上；底背离；RSI 站上 50。',
+   short:'RSI>70 超买区拐头向下；顶背离；RSI 跌破 50。',
+   tip:'币圈 4H RSI 背离最有效。强趋势中 RSI 可长期>70 或<30（钝化），不能机械超买卖，等 RSI 跌破 70 才确认转弱。RSI 三重顶背离是极强的反转信号。',
+   trap:'超买≠马上跌，强趋势可钝化数周。超卖区做空、超买区做多是新手常见错误（逆势）。'},
+  {nm:'KDJ',ab:'Stochastic',what:'K/D/J 三线，比 RSI 更敏感。>80 超买，<20 超卖。',
+   how:'K 上穿 D 金叉看多，下穿死叉看空。J 线领先。',
+   long:'20 以下金叉；底背离。',
+   short:'80 以上死叉；顶背离。',
+   tip:'币圈短线 15m/1H 用得多。J 线长期钝化（持续>100 或<0）是强趋势标志，这时 KDJ 失效别用。KDJ 背离比 RSI 早但假信号多，需共振。',
+   trap:'单边趋势 KDJ 长期超买/超卖钝化，机械操作必亏。噪音大，只做主级别共振。'},
+  {nm:'随机 RSI',ab:'StochRSI',what:'RSI 的 RSI，更敏感的领先指标。0-100。',
+   how:'比 RSI 更早出现超买超卖和背离信号。',
+   long:'超卖区上穿；与 RSI 底背离共振。',
+   short:'超买区下穿；与 RSI 顶背离共振。',
+   tip:'币圈短线进出场点的领先参考，与 RSI 共振更可靠。适合找精确转折点。',
+   trap:'过于敏感，假信号多，必须用大周期趋势过滤，不要单独使用。'}
+]},
+{cat:'波动类',color:'var(--yellow)',items:[
+  {nm:'布林带',ab:'Bollinger Bands',what:'中轨=20MA，上下轨=±2 标准差。衡量波动率与相对价格位置。',
+   how:'收口（带宽缩）=变盘在即；开口放大=趋势启动。价格沿上轨运行=强势多头，沿下轨=强势空头。',
+   long:'站上中轨且中轨上翘；回踩下轨不破；收口后放量破上轨。',
+   short:'跌破中轨且中轨下翘；反弹触及上轨不破；收口后放量破下轨。',
+   tip:'币圈布林收口后常有大波动，可挂上下轨突破单。慢慢收口比急速扩张更值得关注。强势趋势中价格"贴着上轨走"是强势不是超买，别轻易空。中轨是趋势中的均值回归参考。',
+   trap:'强势突破后开口放大，看似"超买"实则是趋势初期，机械做空必亏。收口不一定马上突破，可能反复收口。'},
+  {nm:'ATR',ab:'Average True Range',what:'衡量一段时间内价格波动幅度，反映波动率。不直接给方向，是风控核心。',
+   how:'ATR 大=波动剧烈，小=平静。常用来设自适应止损。',
+   long:'不直接给方向。',
+   short:'不直接给方向。',
+   tip:'币圈止损常设在 1.5-2 倍 ATR 外（避免被噪音扫）。仓位公式：仓位=固定风险金额÷(ATR×2)。ATR 收缩到极值后常伴随变盘；ATR 放大=趋势启动。币圈波动大，ATR 是仓位管理的核心。',
+   trap:'高波动期用固定百分比止损容易被扫，要用 ATR 自适应。'}
+]},
+{cat:'量能类',color:'var(--green)',items:[
+  {nm:'成交量',ab:'Volume',what:'一段时间成交的量。量在价先是铁律。',
+   how:'放量突破有效，缩量突破存疑。放量滞涨=顶部，放量不跌=底部。',
+   long:'突破阻力放量（>前5根均量2倍）；回调缩量。',
+   short:'跌破支撑放量；反弹缩量。',
+   tip:'币圈看 USDT 成交量更真实。交易所刷量普遍，看链上或聚合量。突破需量价齐升。天量见天价、地量见地价是币圈常见规律。',
+   trap:'高量不等于健康，要看价格对量的反应。对敲造假量，只看价格创新高时的量。'},
+  {nm:'VWAP',ab:'Volume Weighted Avg Price',what:'按成交量加权的均价，是日内机构成本线。',
+   how:'价格在 VWAP 上方=多头强势，下方=空头。',
+   long:'站上 VWAP 并回踩不破。',
+   short:'跌破 VWAP 并反弹不破。',
+   tip:'币圈日内交易核心指标，与 EMA21 组合用。VWAP 是大资金成本基准，突破/失守意义大。',
+   trap:'隔日 VWAP 重置，持仓跨日不适用，只看当日。'},
+  {nm:'OBV',ab:'On Balance Volume',what:'累计成交量，价涨加量、价跌减量，反映资金流向。',
+   how:'OBV 上升=资金流入，下降=流出。与价格背离=反转信号。',
+   long:'OBV 创新高+价格突破；底背离。',
+   short:'OBV 走平/下降+价格创新高=顶背离。',
+   tip:'币圈 OBV 看日线趋势，与价格背离是中长期信号。',
+   trap:'短线噪音大，只看中长期方向。'}
+]},
+{cat:'位置 / 结构类',color:'var(--blue)',items:[
+  {nm:'斐波那契',ab:'Fibonacci',what:'0.236/0.382/0.5/0.618/0.786 回撤位，1.272/1.618 扩展位。',
+   how:'0.618 是黄金回撤位，0.5 是半价回撤。',
+   long:'上升浪回调到 0.5-0.618 企稳。',
+   short:'下降浪反弹到 0.5-0.618 受阻。',
+   tip:'币圈用 1.272/1.618 做止盈扩展目标。斐波位与均线/前高前低共振最强。必须配合量能和结构，单独用不准。',
+   trap:'画法主观（起止点选择不同结果不同）。不是每次都回撤到 0.618。'},
+  {nm:'筹码密集区',ab:'Volume Profile / VPVR',what:'按价格统计成交量分布，POC 是成交量最大价位。',
+   how:'价格在 POC 上方=多头，下方=空头。筹码密集区是强支撑阻力。真空区（无筹码）价格移动快。',
+   long:'突破筹码密集区上沿→回踩不破。',
+   short:'跌破密集区下沿→反弹不破。',
+   tip:'币圈用 VPVR 看历史筹码堆积。真空区价格会快速穿越到下一个筹码区。突破后回踩筹码区上沿是高胜率买点。',
+   trap:'筹码随时间迁移，远期筹码区参考性下降。'}
+]},
+{cat:'币圈专属',color:'var(--purple)',items:[
+  {nm:'BTC 占比',ab:'BTC Dominance',what:'BTC 市值占加密总市值比例。反映资金在 BTC 与山寨间的流向。',
+   how:'上升=资金回流 BTC、山寨承压；下降=山寨季、山寨跑赢。',
+   long:'BTC.D 下降→做多山寨；BTC.D 上升→做多 BTC。',
+   short:'BTC.D 上升→做空山寨（或减仓山寨）。',
+   tip:'BTC.D 突破下降趋势=山寨季见顶信号。看 BTC.D + 山寨/BTC 汇率双重确认。BTC.D 见底+BTC 横盘=山寨起飞前兆。',
+   trap:'牛市初期 BTC.D 仍可能上升，单一指标会过早判断山寨季。'},
+  {nm:'恐惧贪婪指数',ab:'Fear & Greed',what:'0-100 情绪指数。<25 极度恐惧，>75 极度贪婪。反向情绪指标。',
+   how:'极度恐惧分批布局，极度贪婪分批减仓。',
+   long:'<25 极度恐惧+基本面没坏→分批抄底。',
+   short:'>75 极度贪婪+价格滞涨→分批逃顶。',
+   tip:'与估值（如 MVRV）结合。极度恐惧+基本面没坏=抄底；极度贪婪+价格滞涨=逃顶。',
+   trap:'牛市可长期>75，熊市长期<25，单一指标会过早，需结合趋势与估值。'},
+  {nm:'资金费率',ab:'Funding Rate',what:'永续合约多空持仓成本。正=多头付空，负=空头付多。反映多空拥挤度。',
+   how:'正费率高=多头拥挤，负费率高=空头拥挤。',
+   long:'极端负费率+价格止跌=空头拥挤可能轧空。',
+   short:'极端正费率+价格滞涨=多头拥挤可能多杀多。',
+   tip:'币圈费率极端+价格结构信号共振是高胜率反转。费率长期正常+趋势=健康。',
+   trap:'强趋势中费率可长期极端，不是反转马上来，需等价格结构破位确认。'},
+  {nm:'未平仓合约',ab:'Open Interest',what:'未平仓合约总量。反映市场参与度和资金活跃度。',
+   how:'OI+价格四象限：OI↑+价↑=新多入场（健康多头）；OI↑+价↓=新空入场；OI↓+价↑=空头平仓（弱多头）；OI↓+价↓=多头止损（弱空头）。',
+   long:'OI↑+价↑突破（新多推动）。',
+   short:'OI↑+价↓跌破（新空推动）。',
+   tip:'币圈 OI 高位骤降常伴随爆仓反转。OI+CVD+价格三合一判断主力意图最准。',
+   trap:'OI 单看无意义，必须配价格方向。OI 上升也可能是多头加杠杆过热。'},
+  {nm:'CVD',ab:'Cum Volume Delta',what:'主动买-主动卖的累计，反映主动成交方向与主力意图。',
+   how:'CVD 与价格同向=健康；背离=反转信号（价涨 CVD 跌=空头主动承接）。',
+   long:'CVD↑+价↑（健康多头）。',
+   short:'CVD↓+价↑背离（空头主动承接）。',
+   tip:'与 OI、价格三合一判断主力意图。CVD 持续背离是中级别反转预警。',
+   trap:'数据依赖交易所，小币种/低流动性品种不准。'},
+  {nm:'爆仓图 / 流动性扫荡',ab:'Liquidation / Sweep',what:'爆仓密集区是价格磁铁；流动性猎杀=价格扫止损后反转。',
+   how:'双顶/双底外侧常堆止损，价格先扫后反。',
+   long:'等下方止损被扫后出现反转结构再进。',
+   short:'等上方止损被扫后出现反转结构再进。',
+   tip:'币圈庄家常扫关键位止损（前高/前低外侧）后反向，这叫 liquidity sweep。看爆仓热力图找高流动性价位做反向，或避开在自己止损密集区挂单——把止损放到人群外侧。',
+    trap:'不是每次都扫，需等结构反转确认，不要提前逆势抄底/摸顶。'}
+]}
+];
+/* ---------- 指标图解 SVG ---------- */
+function indSVG(nm){
+const B='<rect width="340" height="130" fill="#0b0e14" rx="6"/>';
+const T=(x,y,s,c,f)=>'<text x="'+x+'" y="'+y+'" fill="'+(c||'#9aa6b2')+'" font-size="'+(f||9)+'" font-family="monospace">'+s+'</text>';
+switch(nm){
+case'均线系统':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<path d="M10,108 L80,95 L160,80 L240,58 L310,35" stroke="#e6edf3" stroke-width="1" fill="none" opacity="0.4"/>'+
+'<path d="M10,110 L80,100 L160,85 L240,62 L310,40" stroke="#58a6ff" stroke-width="1.8" fill="none"/>'+
+'<path d="M10,105 L80,101 L160,95 L240,78 L310,55" stroke="#d29922" stroke-width="1.8" fill="none"/>'+
+'<path d="M10,112 L80,109 L160,104 L240,94 L310,78" stroke="#bc8cff" stroke-width="1.8" fill="none"/>'+
+'<circle cx="74" cy="100" r="4" fill="#3fb950"/>'+T(82,96,'金叉','#3fb950',9)+
+T(244,16,'━短MA','#58a6ff',8)+T(244,26,'━中MA','#d29922',8)+T(244,36,'━长MA','#bc8cff',8)+
+T(150,124,'多头排列：短>中>长 且全部上翘','#3fb950',8)+'</svg>';
+case'MACD':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+T(6,12,'价','#9aa6b2',8)+
+'<path d="M10,30 L80,22 L150,26 L220,16 L310,12" stroke="#e6edf3" stroke-width="1.2" fill="none" opacity="0.5"/>'+
+'<line x1="220" y1="16" x2="310" y2="12" stroke="#3fb950" stroke-width="1.4" fill="none"/>'+
+T(6,52,'MACD','#9aa6b2',8)+
+'<line x1="10" y1="85" x2="320" y2="85" stroke="#6e7681" stroke-width="0.6"/>'+
+'<path d="M10,90 L80,70 L150,75 L220,58 L310,66" stroke="#58a6ff" stroke-width="1.6" fill="none"/>'+
+'<path d="M10,92 L80,76 L150,80 L220,66 L310,72" stroke="#d29922" stroke-width="1.4" fill="none" opacity="0.7"/>'+
+'<rect x="30" y="85" width="6" height="8" fill="#f85149" opacity="0.5"/><rect x="90" y="78" width="6" height="7" fill="#3fb950" opacity="0.5"/><rect x="230" y="74" width="6" height="11" fill="#3fb950" opacity="0.5"/>'+
+'<line x1="220" y1="16" x2="220" y2="58" stroke="#f85149" stroke-width="0.6" stroke-dasharray="2 2"/>'+
+'<line x1="310" y1="12" x2="310" y2="66" stroke="#f85149" stroke-width="0.6" stroke-dasharray="2 2"/>'+
+T(232,30,'价↑','#f85149',8)+T(232,55,'DIF↓','#f85149',8)+T(150,124,'顶背离：价新高 DIF 新低','#f85149',8)+'</svg>';
+case'趋势线 & 通道':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<line x1="10" y1="105" x2="250" y2="45" stroke="#58a6ff" stroke-width="1.4"/>'+
+'<line x1="10" y1="120" x2="250" y2="60" stroke="#58a6ff" stroke-width="1.4"/>'+
+'<path d="M10,118 L50,108 L90,100 L130,86 L170,78 L210,64 L250,52" stroke="#e6edf3" stroke-width="1.1" fill="none" opacity="0.6"/>'+
+'<path d="M250,52 L290,30 L330,18" stroke="#3fb950" stroke-width="1.8" fill="none"/>'+
+'<circle cx="260" cy="42" r="3.5" fill="#3fb950"/>'+T(266,38,'突破','#3fb950',8)+
+T(8,12,'上升通道','#9aa6b2',8)+T(150,124,'斜率45°最健康，突破通道追击','#3fb950',8)+'</svg>';
+case'价格结构':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<line x1="0" y1="55" x2="340" y2="55" stroke="#f85149" stroke-width="0.8" stroke-dasharray="3 3"/>'+
+'<line x1="0" y1="100" x2="340" y2="100" stroke="#3fb950" stroke-width="0.8" stroke-dasharray="3 3"/>'+
+'<path d="M10,95 L50,58 L90,98 L130,58 L180,50 L210,42 L240,55 L300,28" stroke="#e6edf3" stroke-width="1.3" fill="none"/>'+
+'<circle cx="205" cy="45" r="3.5" fill="#3fb950"/>'+T(210,40,'突破','#3fb950',8)+
+'<circle cx="240" cy="55" r="3.5" fill="#d29922"/>'+T(246,52,'回踩','#d29922',8)+
+T(8,52,'阻力','#f85149',8)+T(8,98,'支撑','#3fb950',8)+
+T(150,124,'突破→阻力变支撑→回踩不破=高胜率买点','#3fb950',8)+'</svg>';
+case'RSI':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<rect x="10" y="15" width="310" height="30" fill="#f85149" opacity="0.08"/>'+
+'<rect x="10" y="85" width="310" height="30" fill="#3fb950" opacity="0.08"/>'+
+'<line x1="10" y1="45" x2="320" y2="45" stroke="#f85149" stroke-width="0.6" stroke-dasharray="2 3"/>'+
+'<line x1="10" y1="85" x2="320" y2="85" stroke="#3fb950" stroke-width="0.6" stroke-dasharray="2 3"/>'+
+'<line x1="10" y1="65" x2="320" y2="65" stroke="#6e7681" stroke-width="0.5" stroke-dasharray="1 4"/>'+
+'<path d="M10,70 L40,42 L75,80 L110,38 L145,75 L185,50 L225,58 L265,52 L310,62" stroke="#bc8cff" stroke-width="1.6" fill="none"/>'+
+'<line x1="110" y1="38" x2="265" y2="52" stroke="#f85149" stroke-width="0.6" stroke-dasharray="2 2"/>'+
+T(8,42,'70','#f85149',8)+T(8,88,'30','#3fb950',8)+T(8,68,'50','#6e7681',8)+
+T(116,32,'峰1','#f85149',8)+T(236,48,'峰2↓','#f85149',8)+
+T(150,124,'顶背离：价新高 RSI 峰降低','#f85149',8)+'</svg>';
+case'KDJ':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<rect x="10" y="15" width="310" height="25" fill="#f85149" opacity="0.08"/>'+
+'<rect x="10" y="90" width="310" height="25" fill="#3fb950" opacity="0.08"/>'+
+'<line x1="10" y1="40" x2="320" y2="40" stroke="#f85149" stroke-width="0.5" stroke-dasharray="2 3"/>'+
+'<line x1="10" y1="90" x2="320" y2="90" stroke="#3fb950" stroke-width="0.5" stroke-dasharray="2 3"/>'+
+'<path d="M10,80 L50,55 L90,75 L130,30 L170,68 L210,95 L250,60 L300,45" stroke="#58a6ff" stroke-width="1.5" fill="none"/>'+
+'<path d="M10,82 L50,62 L90,78 L130,42 L170,72 L210,88 L250,68 L300,52" stroke="#d29922" stroke-width="1.5" fill="none"/>'+
+'<path d="M10,78 L50,48 L90,72 L130,18 L170,64 L210,102 L250,52 L300,38" stroke="#bc8cff" stroke-width="1.2" fill="none" opacity="0.8"/>'+
+'<circle cx="48" cy="54" r="3.5" fill="#3fb950"/>'+T(54,50,'金叉','#3fb950',8)+
+T(8,36,'80','#f85149',8)+T(8,94,'20','#3fb950',8)+
+T(150,124,'J线最敏感(紫)，金叉看多/死叉看空','#9aa6b2',8)+'</svg>';
+case'随机 RSI':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<rect x="10" y="15" width="310" height="25" fill="#f85149" opacity="0.08"/>'+
+'<rect x="10" y="90" width="310" height="25" fill="#3fb950" opacity="0.08"/>'+
+'<line x1="10" y1="40" x2="320" y2="40" stroke="#f85149" stroke-width="0.5" stroke-dasharray="2 3"/>'+
+'<line x1="10" y1="90" x2="320" y2="90" stroke="#3fb950" stroke-width="0.5" stroke-dasharray="2 3"/>'+
+'<path d="M10,75 L30,30 L50,88 L70,28 L90,82 L110,35 L130,95 L150,40 L170,80 L190,30 L210,90 L230,38 L250,85 L270,32 L290,88 L310,42" stroke="#bc8cff" stroke-width="1.4" fill="none"/>'+
+T(8,36,'超买','#f85149',8)+T(8,94,'超卖','#3fb950',8)+
+T(150,124,'比RSI更敏感、信号更早、假信号更多','#d29922',8)+'</svg>';
+case'布林带':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<path d="M10,40 Q70,42 140,55 Q200,40 270,28 L320,22" stroke="#f85149" stroke-width="1.2" fill="none"/>'+
+'<path d="M10,100 Q70,98 140,85 Q200,100 270,112 L320,118" stroke="#3fb950" stroke-width="1.2" fill="none"/>'+
+'<path d="M10,70 Q70,70 140,70 Q200,70 270,70 L320,70" stroke="#d29922" stroke-width="1" fill="none" opacity="0.7" stroke-dasharray="2 2"/>'+
+'<path d="M10,75 L70,82 L140,62 L200,55 L270,40 L320,28" stroke="#e6edf3" stroke-width="1.4" fill="none"/>'+
+'<circle cx="140" cy="55" r="3.5" fill="#d29922"/>'+T(146,52,'收口','#d29922',8)+
+'<circle cx="270" cy="40" r="3.5" fill="#3fb950"/>'+T(276,36,'开口','#3fb950',8)+
+T(8,18,'上轨','#f85149',8)+T(8,68,'中轨','#d29922',8)+T(8,118,'下轨','#3fb950',8)+
+T(150,124,'收口=变盘在即，开口=趋势启动','#bc8cff',8)+'</svg>';
+case'ATR':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<path d="M10,70 L40,72 L70,68 L100,73 L130,70 L160,71 L190,69 L220,72 L250,40 L290,95 L320,30" stroke="#e6edf3" stroke-width="1.3" fill="none"/>'+
+'<line x1="40" y1="65" x2="40" y2="80" stroke="#58a6ff" stroke-width="3" opacity="0.6"/>'+
+'<line x1="100" y1="66" x2="100" y2="82" stroke="#58a6ff" stroke-width="3" opacity="0.6"/>'+
+'<line x1="160" y1="64" x2="160" y2="80" stroke="#58a6ff" stroke-width="3" opacity="0.6"/>'+
+'<line x1="250" y1="35" x2="250" y2="100" stroke="#f85149" stroke-width="3.5" opacity="0.8"/>'+
+'<line x1="290" y1="30" x2="290" y2="98" stroke="#f85149" stroke-width="3.5" opacity="0.8"/>'+
+T(8,18,'ATR波幅','#9aa6b2',8)+T(232,28,'高波动','#f85149',8)+
+T(150,124,'ATR放大=趋势启动，用2×ATR设止损','#58a6ff',8)+'</svg>';
+case'成交量':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<line x1="0" y1="55" x2="340" y2="55" stroke="#f85149" stroke-width="0.6" stroke-dasharray="3 3"/>'+
+'<path d="M10,75 L60,72 L110,76 L160,60 L210,58 L240,30 L290,20 L330,15" stroke="#e6edf3" stroke-width="1.3" fill="none"/>'+
+'<circle cx="232" cy="38" r="3.5" fill="#3fb950"/>'+T(238,34,'放量突破','#3fb950',8)+
+'<rect x="20" y="95" width="14" height="12" fill="#3fb950" opacity="0.4"/>'+
+'<rect x="70" y="92" width="14" height="15" fill="#3fb950" opacity="0.4"/>'+
+'<rect x="120" y="98" width="14" height="9" fill="#3fb950" opacity="0.4"/>'+
+'<rect x="170" y="88" width="14" height="19" fill="#3fb950" opacity="0.5"/>'+
+'<rect x="225" y="72" width="14" height="35" fill="#3fb950" opacity="0.9"/>'+
+'<rect x="275" y="80" width="14" height="27" fill="#3fb950" opacity="0.6"/>'+
+T(8,52,'阻力','#f85149',8)+T(8,118,'量','#9aa6b2',8)+
+T(150,124,'量在价先：放量突破有效，缩量存疑','#3fb950',8)+'</svg>';
+case'VWAP':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<line x1="10" y1="72" x2="320" y2="70" stroke="#d29922" stroke-width="1.6"/>'+
+'<path d="M10,90 L50,75 L90,80 L130,60 L170,50 L210,68 L250,85 L290,95 L320,100" stroke="#e6edf3" stroke-width="1.3" fill="none"/>'+
+'<rect x="10" y="15" width="155" height="115" fill="#3fb950" opacity="0.05"/>'+
+'<rect x="165" y="15" width="155" height="115" fill="#f85149" opacity="0.05"/>'+
+'<circle cx="165" cy="68" r="3.5" fill="#d29922"/>'+
+T(8,18,'价>VWAP多头','#3fb950',8)+T(180,18,'价<VWAP空头','#f85149',8)+
+T(150,124,'VWAP=机构成本线，日内核心','#d29922',8)+'</svg>';
+case'OBV':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<line x1="10" y1="70" x2="320" y2="70" stroke="#6e7681" stroke-width="0.5"/>'+
+'<path d="M10,95 L40,90 L40,82 L75,82 L75,72 L110,72 L110,62 L150,62 L150,50 L190,50 L190,45 L230,45 L230,32 L280,32 L280,25 L320,20" stroke="#3fb950" stroke-width="1.6" fill="none"/>'+
+'<path d="M10,95 L320,20" stroke="#3fb950" stroke-width="0.6" stroke-dasharray="2 3" opacity="0.4"/>'+
+T(8,18,'OBV↑','#3fb950',8)+T(8,88,'0','#6e7681',8)+
+T(150,124,'OBV上升=资金流入，与价背离=反转预警','#3fb950',8)+'</svg>';
+case'斐波那契':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<line x1="180" y1="15" x2="180" y2="120" stroke="#6e7681" stroke-width="0.5"/>'+
+['1.0','0.786','0.618','0.5','0.382','0.236','0'].map((l,i)=>{const y=15+i*17.5;return '<line x1="20" y1="'+y+'" x2="320" y2="'+y+'" stroke="#2a313c" stroke-width="0.5" stroke-dasharray="2 3"/>'+T(295,y-3,l,'#9aa6b2',8)}).join('')+
+'<path d="M250,20 L210,55 L120,55 L300,20" stroke="#e6edf3" stroke-width="1.3" fill="none"/>'+
+'<circle cx="210" cy="55" r="4" fill="#d29922"/>'+T(216,52,'0.618','#d29922',9)+
+T(8,18,'价','#9aa6b2',8)+T(8,124,'时间','#9aa6b2',8)+
+T(150,124,'回调到0.5-0.618企稳=黄金买点','#d29922',8)+'</svg>';
+case'筹码密集区':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<rect x="120" y="50" width="140" height="50" fill="#58a6ff" opacity="0.06"/>'+
+'<line x1="60" y1="35" x2="60" y2="120" stroke="#e6edf3" stroke-width="1.3"/>'+
+'<path d="M60,120 L60,30 L120,40 L190,75 L240,35 L300,20" stroke="#e6edf3" stroke-width="1.3" fill="none"/>'+
+'<rect x="130" y="60" width="22" height="8" fill="#58a6ff" opacity="0.5"/>'+
+'<rect x="130" y="70" width="30" height="8" fill="#58a6ff" opacity="0.6"/>'+
+'<rect x="130" y="80" width="40" height="8" fill="#58a6ff" opacity="0.8"/>'+
+'<rect x="130" y="90" width="34" height="8" fill="#58a6ff" opacity="0.6"/>'+
+'<rect x="130" y="100" width="20" height="8" fill="#58a6ff" opacity="0.5"/>'+
+'<circle cx="172" cy="84" r="4" fill="#bc8cff"/>'+T(178,82,'POC','#bc8cff',8)+
+'<circle cx="240" cy="35" r="3.5" fill="#3fb950"/>'+T(246,32,'突破密集区上沿','#3fb950',7.5)+
+T(8,18,'价','#9aa6b2',8)+T(150,124,'POC上方=多头，真空区价格移动快','#58a6ff',8)+'</svg>';
+case'BTC 占比':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<path d="M10,30 L70,40 L130,52 L190,68 L250,82 L320,100" stroke="#f85149" stroke-width="1.8" fill="none"/>'+
+'<path d="M10,80 L70,75 L130,68 L190,58 L250,48 L320,35" stroke="#3fb950" stroke-width="1.8" fill="none" opacity="0.8"/>'+
+'<line x1="10" y1="100" x2="320" y2="100" stroke="#6e7681" stroke-width="0.5"/>'+
+T(8,18,'BTC.D↓','#f85149',8)+T(8,28,'山寨/BTC↑','#3fb950',8)+
+T(150,124,'BTC.D下降=山寨季，做多山寨','#3fb950',8)+'</svg>';
+case'恐惧贪婪指数':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<rect x="20" y="50" width="60" height="22" fill="#f85149"/>'+
+'<rect x="80" y="50" width="50" height="22" fill="#d29922" opacity="0.8"/>'+
+'<rect x="130" y="50" width="40" height="22" fill="#d29922"/>'+
+'<rect x="170" y="50" width="50" height="22" fill="#3fb950" opacity="0.6"/>'+
+'<rect x="220" y="50" width="100" height="22" fill="#3fb950"/>'+
+'<polygon points="135,46 145,46 140,38" fill="#e6edf3"/>'+
+'<line x1="140" y1="50" x2="140" y2="72" stroke="#e6edf3" stroke-width="1.6"/>'+
+T(25,80,'极度恐惧','#f85149',8)+T(232,80,'极度贪婪','#3fb950',8)+
+T(25,40,'0','#9aa6b2',7)+T(312,40,'100','#9aa6b2',7)+
+T(150,124,'当前≈40(恐惧)，<25分批布局','#bc8cff',8)+'</svg>';
+case'资金费率':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<line x1="170" y1="20" x2="170" y2="115" stroke="#6e7681" stroke-width="0.8"/>'+
+'<rect x="90" y="40" width="80" height="14" fill="#3fb950" opacity="0.85"/>'+
+'<rect x="110" y="58" width="60" height="14" fill="#3fb950" opacity="0.7"/>'+
+'<rect x="140" y="76" width="30" height="14" fill="#3fb950" opacity="0.5"/>'+
+'<rect x="170" y="40" width="60" height="14" fill="#f85149" opacity="0.85"/>'+
+'<rect x="170" y="58" width="80" height="14" fill="#f85149" opacity="0.7"/>'+
+T(8,52,'多头拥挤','#3fb950',8)+T(245,52,'空头拥挤','#f85149',8)+
+T(150,18,'费率','#9aa6b2',8)+T(160,124,'0','#9aa6b2',8)+
+T(150,124,'极端正费率+滞涨=多杀多预警','#f85149',8)+'</svg>';
+case'未平仓合约':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<line x1="170" y1="20" x2="170" y2="115" stroke="#6e7681" stroke-width="0.6"/>'+
+'<line x1="15" y1="68" x2="325" y2="68" stroke="#6e7681" stroke-width="0.6"/>'+
+'<text x="190" y="32" fill="#3fb950" font-size="8" font-family="monospace">OI↑价↑</text><text x="250" y="40" fill="#3fb950" font-size="11" font-family="monospace">↗</text>'+
+'<text x="190" y="92" fill="#d29922" font-size="8" font-family="monospace">OI↓价↑</text><text x="250" y="100" fill="#d29922" font-size="11" font-family="monospace">↗</text>'+
+'<text x="60" y="32" fill="#f85149" font-size="8" font-family="monospace">OI↑价↓</text><text x="120" y="40" fill="#f85149" font-size="11" font-family="monospace">↘</text>'+
+'<text x="60" y="92" fill="#d29922" font-size="8" font-family="monospace">OI↓价↓</text><text x="120" y="100" fill="#d29922" font-size="11" font-family="monospace">↘</text>'+
+T(8,16,'价','#9aa6b2',8)+T(8,124,'OI↑','#9aa6b2',8)+T(300,16,'价↑','#9aa6b2',7)+T(300,124,'OI↓','#9aa6b2',7)+
+T(8,40,'健康多头','#3fb950',7.5)+T(8,104,'多头止损','#d29922',7.5)+
+T(190,40,'健康空头','#f85149',7.5)+T(190,104,'空头平仓','#d29922',7.5)+
+'</svg>';
+case'CVD':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+T(6,18,'价','#9aa6b2',8)+
+'<path d="M10,80 L80,60 L150,68 L220,45 L310,30" stroke="#e6edf3" stroke-width="1.3" fill="none" opacity="0.7"/>'+
+'<line x1="10" y1="105" x2="320" y2="105" stroke="#6e7681" stroke-width="0.5"/>'+
+'<path d="M10,108 L80,98 L150,95 L220,102 L310,108" stroke="#58a6ff" stroke-width="1.6" fill="none"/>'+
+'<line x1="150" y1="68" x2="220" y2="45" stroke="#f85149" stroke-width="0.6" stroke-dasharray="2 2"/>'+
+'<line x1="150" y1="95" x2="310" y2="108" stroke="#58a6ff" stroke-width="0.6" stroke-dasharray="2 2"/>'+
+T(155,42,'价↑','#f85149',8)+T(200,98,'CVD↓','#58a6ff',8)+
+T(150,124,'顶背离：价涨 CVD跌=空头主动承接','#f85149',8)+'</svg>';
+case'爆仓图 / 流动性扫荡':return '<svg viewBox="0 0 340 130" class="ind-svg">'+B+
+'<rect x="150" y="75" width="80" height="35" fill="#f85149" opacity="0.12"/>'+
+'<line x1="150" y1="75" x2="230" y2="75" stroke="#f85149" stroke-width="0.8" stroke-dasharray="3 2"/>'+
+'<path d="M10,55 L60,50 L110,58 L160,62 L200,105 L210,98 L240,45 L280,30 L320,20" stroke="#e6edf3" stroke-width="1.4" fill="none"/>'+
+'<circle cx="205" cy="100" r="4" fill="#f85149"/>'+T(212,103,'扫止损','#f85149',8)+
+'<path d="M205,100 L255,55" stroke="#3fb950" stroke-width="1.6" fill="none"/>'+
+'<polygon points="255,55 247,53 250,61" fill="#3fb950"/>'+
+T(160,70,'流动性密集区','#f85149',7.5)+
+T(150,124,'扫止损后反转=liquidity sweep','#3fb950',8)+'</svg>';
+default:return '';
+}
+}
+
+
+function renderIndicators(){
+  const legend=`<div class="legend">
+    <span>▲ 做多信号</span><span>▼ 做空信号</span><span>◆ 实战技巧</span><span>! 常见陷阱</span>
+  </div>`;
+  let intro=`<div class="ind-intro">
+    <div class="h">📖 币圈操盘手指标手册</div>
+    <p>以下指标均针对虚拟币、多空通用。<b>没有任何单一指标能包打天下</b>——稳定盈利者靠的是"多指标共振 + 量价结构 + 严守风控"。用法心法：<b>大周期定方向、小周期找进点、共振才动手</b>。所有指标在币圈 4H/日线最准，15m 以下噪音大、假信号多。</p>
+    <div class="ind-three">
+      <div class="b"><div class="bt">第一原则</div><div class="bb">先看大周期趋势（日线/4H），顺势而为。不要在下降趋势里找做多信号。</div></div>
+      <div class="b"><div class="bt">共振原则</div><div class="bb">2-3 个指标同向才算高概率。单一金叉/背离不可信。</div></div>
+      <div class="b"><div class="bt">风控原则</div><div class="bb">指标只是触发，止损与仓位（2%铁律）决定生死。</div></div>
+    </div>
+  </div>`;
+  let html=intro+legend;
+  INDICATORS.forEach(cat=>{
+    html+=`<div class="ind-cat"><span class="bar" style="background:${cat.color}"></span>${cat.cat}<span class="cnt">${cat.items.length} 项</span></div><div class="ind-grid">`;
+    cat.items.forEach(it=>{
+      html+=`<div class="ind-card"><div class="ind-head"><span class="nm">${it.nm}</span><span class="ab">${it.ab}</span></div>`;
+      html+=indSVG(it.nm);
+      html+=fld('是什么',it.what,'');
+      html+=fld('怎么看',it.how,'');
+      html+=fld('做多信号',it.long,'long');
+      html+=fld('做空信号',it.short,'short');
+      html+=fld('实战技巧',it.tip,'tip');
+      html+=fld('常见陷阱',it.trap,'trap');
+      html+='</div>';
+    });
+    html+='</div>';
+  });
+  /* ---- 选币策略收尾（来自实战筛选流程） ---- */
+  html+=`<div class="ind-cat"><span class="bar" style="background:var(--purple)"></span>选币策略 — 找出"正在走"这种结构的币<span class="cnt">实战</span></div>`;
+  html+=`<div class="ind-card"><div class="ind-head"><span class="nm">如何筛出同类币</span><span class="ab">SCREEN</span></div>`;
+  html+=`<div class="ind-fld"><div class="l">思路</div><div class="v">扫描<b>低市值 + 放量突破 + 趋势健康</b>的币，只做早段/中段，末段别追。币圈数据站屏蔽自动抓取，需手动在 CoinGecko / TradingView 上筛。</div></div>`;
+  html+=`<div class="ind-fld"><div class="l">CoinGecko 筛选器参数（市值分档）</div><div class="v">
+    <table style="width:100%;font-size:12.5px;margin-top:4px">
+      <tr><th style="text-align:left;color:var(--txt3);padding:5px;border-bottom:1px solid var(--border)">市值档</th><th style="text-align:left;color:var(--txt3);padding:5px;border-bottom:1px solid var(--border)">量/市值阈值</th><th style="text-align:left;color:var(--txt3);padding:5px;border-bottom:1px solid var(--border)">预期涨幅</th><th style="text-align:left;color:var(--txt3);padding:5px;border-bottom:1px solid var(--border)">特征</th></tr>
+      <tr><td style="padding:6px 5px;border-bottom:1px solid var(--border)">低市值 &lt;$100M</td><td style="padding:6px 5px;border-bottom:1px solid var(--border)">&gt; 0.3</td><td style="padding:6px 5px;border-bottom:1px solid var(--border);color:var(--green)">3–10×</td><td style="padding:6px 5px;border-bottom:1px solid var(--border)">暴力但易插针砸盘</td></tr>
+      <tr><td style="padding:6px 5px;border-bottom:1px solid var(--border)">中市值 $100M–$1B</td><td style="padding:6px 5px;border-bottom:1px solid var(--border)">&gt; 0.15</td><td style="padding:6px 5px;border-bottom:1px solid var(--border);color:var(--green)">2–3×</td><td style="padding:6px 5px;border-bottom:1px solid var(--border)">主升段最清晰，最适合做</td></tr>
+      <tr><td style="padding:6px 5px;border-bottom:1px solid var(--border)">大市值 $1B–$5B+</td><td style="padding:6px 5px;border-bottom:1px solid var(--border)">&gt; 0.08</td><td style="padding:6px 5px;border-bottom:1px solid var(--border);color:var(--green)">1.5–2×</td><td style="padding:6px 5px;border-bottom:1px solid var(--border)">需大催化，慢但扎实</td></tr>
+      <tr><td style="padding:6px 5px">7d 涨幅</td><td style="padding:6px 5px" colspan="2">+30% ~ +120%</td><td style="padding:6px 5px">启动中段，非已爆顶</td></tr>
+      <tr><td style="padding:6px 5px">流通率</td><td style="padding:6px 5px" colspan="2">&gt; 60%</td><td style="padding:6px 5px">避开高解锁砸盘</td></tr>
+    </table>
+    <div class="callout" style="margin-top:8px">市值只决定"能涨几倍"，不决定"是否在结构里"。是否在结构中由 放量突破前高 + EMA多头排列 + RSI未超买 + 费率未极端 决定——与市值无关。</div></div></div>`;
+  html+=`<div class="ind-fld"><div class="l">TradingView 6 条件（4H，满足≥3项才算同类）</div><div class="v"><code class="blk">1. 收盘价站上 200EMA 且 200EMA 上翘      // 多头市场
+2. EMA21 > EMA55 且价格回踩 EMA21 不破     // 趋势健康中段
+3. 近20根内放量突破前高（量 > 5均量×1.5）  // 启动信号
+4. RSI 4H 55~70（未超买）                  // 还没到加速末段
+5. 资金费率未极端（|funding| < 0.05%）     // 还没拥挤
+6. BTC.D 同期走平或下行                     // 山寨季环境</code></div></div>`;
+  html+=`<div class="ind-fld"><div class="l">三阶段动作表</div><div class="v">
+    <table style="width:100%;font-size:12.5px;margin-top:4px">
+      <tr><th style="text-align:left;color:var(--txt3);padding:5px;border-bottom:1px solid var(--border)">阶段</th><th style="text-align:left;color:var(--txt3);padding:5px;border-bottom:1px solid var(--border)">特征</th><th style="text-align:left;color:var(--txt3);padding:5px;border-bottom:1px solid var(--border)">动作</th></tr>
+      <tr><td style="padding:6px 5px;border-bottom:1px solid var(--border);color:var(--green);font-weight:600">早段(可多)</td><td style="padding:6px 5px;border-bottom:1px solid var(--border)">破前高+量增+RSI&lt;70+费率正常</td><td style="padding:6px 5px;border-bottom:1px solid var(--border)">回踩轻仓多，止损EMA21下</td></tr>
+      <tr><td style="padding:6px 5px;border-bottom:1px solid var(--border);color:var(--blue);font-weight:600">中段(持仓)</td><td style="padding:6px 5px;border-bottom:1px solid var(--border)">加速、贴EMA21爬升</td><td style="padding:6px 5px;border-bottom:1px solid var(--border)">持多，移动止损跟上</td></tr>
+      <tr><td style="padding:6px 5px;color:var(--red);font-weight:600">末段(别追,空饵)</td><td style="padding:6px 5px">斜率&gt;60°+RSI&gt;80+顶背离+费率极端+天量长上影</td><td style="padding:6px 5px">不追多；做空须等4H收盘跌破前低+MACD死叉</td></tr>
+    </table></div></div>`;
+  html+=`<div class="callout bad">⚠ 你的旧毛病：把"末段"当"顶"提前空（如 DEXE 短在 32 = 加速段起点）。筛到同类币后——做多只做早段，做空必须等见顶结构三项共振（4H收盘跌破前低 + RSI顶背离 + MACD死叉），否则就是再演一次 32→49.5 的轧空。</div>`;
+  html+=`</div>`;
+  document.getElementById('indicatorsBody').innerHTML=html;
+}
+function fld(l,v,cls){return`<div class="ind-fld ${cls}"><div class="l">${l}</div><div class="v">${v}</div></div>`}
+
+/* ---------- 选币筛子 ---------- */
+const SCR_A=[
+ ['a1','收盘价站上 200EMA 且 200EMA 上翘','多头市场基准线'],
+ ['a2','EMA21 > EMA55 且回踩 EMA21 不破','趋势健康中段'],
+ ['a3','近20根内放量突破前高（量>5均量×1.5）','启动信号'],
+ ['a4','RSI 4H 55~70（未超买）','动能健康、不追高'],
+ ['a5','资金费率未极端（|funding|<0.05%）','尚未拥挤'],
+ ['a6','BTC.D 走平或下行','山寨季环境']
+];
+const SCR_B=[
+ ['b1','4H 斜率 > 60°（陡峭加速）','末段特征'],
+ ['b2','RSI 4H > 80','超买'],
+ ['b3','RSI/MACD 顶背离','反转预警'],
+ ['b4','资金费率极端（|funding|>0.1%）','多/空拥挤'],
+ ['b5','天量 + 长上影/吞没阴线','派发信号']
+];
+const scrState={};
+const SCR_TIERS={
+  low:{name:'低市值 <$100M',vol:'> 0.3',mag:'3–10×',feat:'暴力但易插针砸盘，仓位更小'},
+  mid:{name:'中市值 $100M–$1B',vol:'> 0.15',mag:'2–3×',feat:'主升段最清晰，最适合做'},
+  big:{name:'大市值 $1B–$5B+',vol:'> 0.08',mag:'1.5–2×',feat:'需大催化(上线/合作)，慢但扎实'}
+};
+let curTier='mid';
+function scrTier(el){curTier=el.dataset.tier;document.querySelectorAll('#scrTier .tier-item').forEach(e=>e.classList.toggle('on',e.dataset.tier===curTier));renderTierInfo()}
+function renderTierInfo(){const t=SCR_TIERS[curTier];document.getElementById('scrTierInfo').innerHTML=`量/市值阈值 <b>${t.vol}</b> · 预期涨幅 <b>${t.mag}</b> · ${t.feat}`}
+function renderScr(){
+  const A=document.getElementById('scrA'),B=document.getElementById('scrB');
+  A.innerHTML=SCR_A.map(([id,l,h])=>`<div class="scr-item" data-id="${id}" onclick="scrToggle(this)"><div class="box">✓</div><div class="tx"><div class="l2">${l}</div><div class="h2">${h}</div></div></div>`).join('');
+  B.innerHTML=SCR_B.map(([id,l,h])=>`<div class="scr-item" data-id="${id}" onclick="scrToggle(this)"><div class="box">✓</div><div class="tx"><div class="l2">${l}</div><div class="h2">${h}</div></div></div>`).join('');
+}
+function scrToggle(el){const id=el.dataset.id;scrState[id]=!scrState[id];el.classList.toggle('on',scrState[id])}
+function scrReset(){SCR_A.forEach(([id])=>scrState[id]=false);SCR_B.forEach(([id])=>scrState[id]=false);document.querySelectorAll('#scrA .scr-item,#scrB .scr-item').forEach(e=>e.classList.remove('on'));document.getElementById('scrVerdict').innerHTML='<div style="color:var(--txt3);font-size:13px">勾选上方条件后点"评估"，将给出：当前阶段、可执行动作、风险提示。</div>'}
+function scrEval(){
+  const a=SCR_A.filter(([id])=>scrState[id]).length;
+  const b=SCR_B.filter(([id])=>scrState[id]).length;
+  const coin=(document.getElementById('scrCoin').value||'该币').trim();
+  let stage,stageColor,act,warn,warnCls;
+  if(b>=3){
+    stage='末段加速 / 见顶区';stageColor='var(--red)';
+    act='别追多！这是空饵区。价格能拉到远超"合理"，追多=接盘。持仓者立刻收紧止损并准备减仓。';
+    warn='做空还早——须等见顶结构三项共振：①4H收盘跌破前低 ②RSI顶背离 ③MACD死叉。否则就是 DEXE 32→49.5 的轧空重演。';warnCls='bad';
+  }else if(b>=2){
+    stage='见顶苗头';stageColor='var(--yellow)';
+    act='出现 '+b+' 个见顶信号。别再新进多单，持仓者收紧止损（移到 EMA21 下或前低下），随时准备减仓。';
+    warn='还没到顶——做空仍需等三项共振见顶结构。但多单别加仓，这是末段前奏。';warnCls='warn';
+  }else if(b>=1&&a>=1){
+    stage='信号矛盾';stageColor='var(--purple)';
+    act='早段和末段信号同时出现——要么是剧烈波动末期，要么数据矛盾。降级到更高级别（日线）确认方向后再做。';
+    warn='矛盾信号=高不确定性，最易亏钱。先观望，等一边压倒另一边。';warnCls='warn';
+  }else if(a>=4){
+    stage='早/中段健康多头';stageColor='var(--green)';
+    act='可考虑回踩轻仓做多，止损放 EMA21 下方，单笔风险≤2%，分批进。';
+    warn='趋势健康但仍要守纪律：破 EMA21 减仓，破前低离场。别因"看着强"就重仓。';warnCls='warn';
+  }else if(a>=2){
+    stage='趋势中段 / 信号不足';stageColor='var(--yellow)';
+    act='持仓可，新进需谨慎。等回踩 EMA21 + 放量确认再动手，或干脆等下一波。';
+    warn='信号不充分，强行做=赌。宁可错过不可做错。';warnCls='warn';
+  }else{
+    stage='结构不明确';stageColor='var(--txt3)';
+    act='不做。既没趋势也没见顶，等待结构走出来。';
+    warn='现在做任何方向都是猜。等 4H 出现明确趋势或见顶结构再行动。';warnCls='';
+  }
+  const tier=SCR_TIERS[curTier];
+  document.getElementById('scrVerdict').innerHTML=
+    `<div class="scr-tier-banner">市值档：<b>${tier.name}</b> · 预期 <b>${tier.mag}</b> · 量/市值阈值 <b>${tier.vol}</b></div>
+     <div class="scr-meter">
+       <div class="m"><div style="color:var(--txt3);font-size:11px">A 早段/做多</div><div class="n" style="color:var(--green)">${a} / ${SCR_A.length}</div></div>
+       <div class="m"><div style="color:var(--txt3);font-size:11px">B 末段/见顶</div><div class="n" style="color:var(--red)">${b} / ${SCR_B.length}</div></div>
+     </div>
+     <div class="stage" style="color:${stageColor}">${coin} · ${stage}</div>
+     <div class="act">${act}</div>
+     <div class="warn ${warnCls}" style="${warnCls==='bad'?'border-color:var(--red);color:var(--red)':warnCls==='warn'?'border-color:var(--yellow);color:var(--yellow)':'border-color:var(--border);color:var(--txt2)'}">${warn}</div>`;
+}
+
+
+/* ---------- 进步指南 ---------- */
+function renderGuide(){
+  document.getElementById('guideBody').innerHTML=`
+  <div class="callout">交易是少数人盈利的负和游戏。<b>80%的人长期亏损</b>，差别不在智商，而在「是否有系统 + 是否一致执行 + 是否复盘」。本指南给你一条可走的路。</div>
+
+  <div class="guide-card"><h3><span class="n">1</span>先模拟，后实盘</h3>
+    <p>新手最致命的错误是拿真钱试错。先用模拟盘（TradingView 纸面交易 / 币圈 testnet）跑 <b>至少 3 个月</b>，跑出正期望再上实盘。</p>
+    <ul>
+      <li>验证你的策略在不同市场环境下是否站得住</li>
+      <li>建立对盈亏波动的心理耐受</li>
+      <li>记录每笔模拟交易到本日志，养成习惯</li>
+    </ul>
+  </div>
+
+  <div class="guide-card"><h3><span class="n">2</span>只用亏光不心疼的钱</h3>
+    <p>实盘起步金额 = <b>你愿意全部亏掉也不影响生活的钱</b>。这笔钱的作用是「校准心态」，不是「赚大钱」。</p>
+    <p>目标不是赚钱，是<code>建立可重复的执行流程</code>。</p>
+  </div>
+
+  <div class="guide-card"><h3><span class="n">3</span>单笔风险 ≤ 2% 铁律</h3>
+    <p>这是本日志评测里权重最高的指标。每笔交易的<b>最大可亏损金额</b>（=|入场-止损|×数量）不超过总资金的 2%。</p>
+    <ul>
+      <li>账户 1万 → 单笔最多亏 200</li>
+      <li>连亏 10 笔也只掉 20%，还能东山再起</li>
+      <li>违反这条 = 在玩俄罗斯轮盘赌，迟早归零</li>
+    </ul>
+    <div class="callout warn">本日志会在你填入参数后实时计算风险%，超过 2% 会警告。</div>
+  </div>
+
+  <div class="guide-card"><h3><span class="n">4</span>只做计划盈亏比 ≥ 1:2 的机会</h3>
+    <p>胜率 40% 也能盈利的数学：10 笔交易，4 胜 6 败，每胜赚 2R、每败亏 1R → 净 +2R。这就是正期望。</p>
+    <p>低于 1:2 的机会，胜率要极高才不亏，新手做不到。<code>放过不是错过</code>。</p>
+  </div>
+
+  <div class="guide-card"><h3><span class="n">5</span>先定止损，再定入场</h3>
+    <p>下单前先问：我的止损在哪？→ 由止损反推仓位（= 2%风险 ÷ 单位风险）。<b>止损是交易的前提，不是事后补救。</b></p>
+    <p>进场后<b>立刻</b>挂止损单，不靠手动执行——人会犹豫。</p>
+  </div>
+
+  <div class="guide-card"><h3><span class="n">6</span>让利润奔跑，让亏损截断</h3>
+    <p>盈利单用<b>移动止损（trailing stop）</b>逐步上移止损保护利润；亏损单到止损<b>无条件执行</b>。</p>
+    <p>新手通病：赚一点就跑（落袋为安）、亏了就死扛（不认错）——这叫「截断利润、让亏损奔跑」，必败。</p>
+  </div>
+
+  <div class="guide-card"><h3><span class="n">7</span>只专注 1-2 个品种</h3>
+    <p>先把一个品种的「股性/币性」摸透。比如只做 BTC 4H 趋势，或只做 AAPL 日线突破。覆盖太多品种 = 都不熟 = 都赚不到。</p>
+    <p>稳定盈利 6 个月后再考虑扩展。</p>
+  </div>
+
+  <div class="guide-card"><h3><span class="n">8</span>写交易日志（就是本软件）</h3>
+    <p>这是<b>新手与高手的分水岭</b>。每笔交易都记，重点写：</p>
+    <ul>
+      <li><b>进场前</b>的逻辑（不是事后编故事）</li>
+      <li><b>出场后</b>的复盘：对在哪、错在哪、可复用的规则</li>
+      <li><b>情绪</b>：当时真实感受，日后会发现重复的模式</li>
+    </ul>
+    <p>积累 50-100 笔后，你会看到自己亏钱的<b>固定模式</b>（比如"每次连亏后重仓"），看见了就能改。</p>
+  </div>
+
+  <div class="guide-card"><h3><span class="n">9</span>复盘要具体，不要泛泛</h3>
+    <p>❌ 错误复盘：「要控制情绪」「下次小心点」——没用。</p>
+    <p>✅ 正确复盘：「4H K线没收盘就进场，被假突破骗了。下次<b>等4H收盘确认</b>再进」「连亏2笔后第3笔仓位翻倍，违反2%铁律。下次连亏2笔强制休息24小时」。</p>
+    <p>复盘的产出应该是<b>一条可执行的新规则</b>，写进你的交易系统。</p>
+  </div>
+
+  <div class="guide-card"><h3><span class="n">10</span>一致性执行 100 次再看结果</h3>
+    <p>策略有没有效，至少要 <b>30-50 笔</b>同类型样本才能判断。前 10 笔亏了不代表策略错，可能只是概率波动。</p>
+    <p>频繁换策略 = 永远在试错阶段。<b>一致性地执行你的系统</b>，是稳定盈利者的共同特征。</p>
+  </div>
+
+  <div class="guide-card"><h3><span class="n">11</span>精读经典（按顺序）</h3>
+    <ul>
+      <li><b>《日本蜡烛图技术》</b> Steve Nison —— K线基础</li>
+      <li><b>《以交易为生》</b> Alexander Elder —— 心理 + 系统 + 仓位三件套</li>
+      <li><b>《海龟交易法则》</b> —— 机械化系统与资金管理</li>
+      <li><b>《股票作手回忆录》</b> Edwin Lefèvre —— 投机智慧，百年不过时</li>
+      <li><b>《交易心理分析》</b> Mark Douglas —— 解决执行与心态</li>
+    </ul>
+  </div>
+
+  <div class="callout bad">⚠ 最后提醒：保住本金比追求收益重要 10 倍。任何让你"一夜暴富"的念头，都是市场收割你的信号。慢，就是快。</div>
+  `;
+}
+
+/* ---------- 工具 ---------- */
+function fmt(n){if(n==null||isNaN(n))return'—';const sign=n<0?'-':'+';const abs=Math.abs(n);return sign+(abs>=1000?abs.toLocaleString():abs.toFixed(2))}
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function dateSort(a,b){if(a.date!==b.date)return a.date<b.date?1:-1;return (b.savedAt||0)-(a.savedAt||0)}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
+
+/* ---------- 示范案例 ---------- */
+function sampleEntry(){
+  const d={
+    id:'sample_btc_breakout_001',
+    date:today(),market:'spot',symbol:'BTC/USDT',direction:'long',setup:'突破回踩',timeframe:'4H',
+    tags:['趋势跟踪','高概率','按计划执行'],
+    entry:67550,exit:68900,size:0.3,stop:67400,target:69000,account:10000,fees:18,leverage:1,
+    trend:'上升趋势',regime:'强势',
+    entryReason:'BTC 4H 周期站上 200EMA，趋势向上。价格突破前高 68000 后回踩 67500 不破，回踩位缩量（量比 0.7），RSI 55 健康未超买，结构上是"突破-回踩-确认"的高胜率形态。\n\n计划：67550 进场，止损 67400（回踩低点下方），目标 69000（前期阻力位）。盈亏比约 1:9.7，远超 1:2 红线。\n仓位计算：单笔风险 = |67550-67400|×0.3 = 45U，占账户 0.45%，远低于 2%。',
+    exitReason:'价格触及 69000 目标位，按计划减仓 50% 锁定利润；剩余仓位用 trailing stop 跟踪，跌破 68500 平仓。整体执行符合计划，未临时起意。',
+    emotionEntry:'自信',emotionHold:'平静',emotionAfter:'释怀',emotionNote:'进场前已写好计划，进场时没有犹豫。持仓期间价格回抽 67700 也没慌，因为止损在 67400，心理有底。',
+    mistakes:'基本无大错。唯一可优化：减仓 50% 略显保守，强势趋势中可只减 30%，让更多仓位奔跑。但这属于优化项，不是错误。',
+    lessons:'1. 突破后首次回踩 + 缩量 + 趋势方向一致，是高胜率加仓/进场点，可作为常态化信号。\n2. 提前写好计划 + 挂好止损单 = 心态稳，执行不变形。\n3. 盈利单别急着全平，用移动止损让利润奔跑。',
+    redo:'下次在同类强势趋势中，可将减仓比例从 50% 降到 30%，剩余仓位用更宽的 trailing（如 4H 的前一根 K 线低点）跟踪，捕捉更大趋势段。',
+    selfScore:{planExecution:5,entryTiming:4,exitTiming:4,riskMgmt:5,emotionCtrl:5},
+    img:'',savedAt:Date.now()
+  };
+  d.eval=evaluate(d);
+  return d;
+}
+
+/* ---------- 真实案例：DEXE 合约做空（反面教材） ---------- */
+function sampleDEXE(){
+  const d={
+    id:'sample_dexe_short_001',
+    date:'2026-07-10',market:'perp',symbol:'DEXE/USDT',direction:'short',setup:'反转',timeframe:'4H',
+    tags:['合约','高杠杆','亏损加仓','摊平成本','贪婪','小账户心态','违背计划'],
+    entry:44,exit:38,size:8,stop:52,target:32,account:70,fees:6,leverage:5,
+    trend:'上升趋势',regime:'剧烈波动',
+    entryReason:'背景：账户仅 16 USDT，玩 DEXE 永续合约。\n\n判断：DEXE 价格已突破前高，盘中看到价格快速回落，主观认为"涨不动了、可以空了"，于是在 32 以 5x 杠杆开空 2 个 DEXE，爆仓价 39。\n\n进场依据的问题：\n1. 只是"看到在跌"就追空，没有结构 / 量能 / 趋势确认——属于追跌式做空。\n2. 5x 杠杆 + 爆仓价 39（距入场 32 仅约 22%），容错极低，等于赌方向。\n3. 把"爆仓价"当止损，进场时没有挂真正的止损单。\n4. "本金小、爆仓也无所谓"的心态——这是最危险的，坏习惯会在本金大时复刻成大亏。\n\n（注：本表按补仓后的"最终均价 44"记录入场，便于如实计算整体盈亏与风险；完整补仓过程见下方"出场逻辑"。）',
+    exitReason:'原计划：止盈挂 32，想着"一定要到止盈才走"。\n\n实际过程：\n- 第二天价格就打到 39 爆仓线，我不甘心，补保证金扛住。\n- 随后价格继续上行，我在 49.5 加空 2 个、48.5 加空 4 个，把均价从 32 拉高到约 44.6（8 个 DEXE）。\n- 止盈 32 挂了几天一直磨人，今天没忍住在 38 全部平掉，落袋为安。\n\n最终这笔是盈利的，但过程极其难看：靠逆势加仓 + 补保证金才活下来。\n\n自我评估：在"卖"这一步错误相对不大——只要有利润，想走随时可以走，卖飞了也不必纠结。真正的错误全在"开仓"和"持仓"阶段。',
+    emotionEntry:'FOMO追单',emotionHold:'死扛不认错',emotionAfter:'庆幸扛回',emotionNote:'进场时：觉得本金小随便玩，对市场没有敬畏。\n持仓时：打到爆仓线不甘心认错，选择补保证金 + 逆势加仓摊平，典型"死扛不认错"。\n平仓时：被磨得没耐心提前落袋——反而这一步是合理的。',
+    mistakes:'1. 贪婪：用 5x 杠杆想放大收益，爆仓价 39 容错太低。\n2. 小账户"随便玩"心态——养成坏习惯，未来放大本金必爆。\n3. 没挂真实止损，拿爆仓价当止损。\n4. 亏损加仓（摊平成本）：价格从 32 一路涨到 49.5，我一路加空，这是 Martingale 式自杀操作，是账户清零的捷径。\n5. 止盈挂 32 太远不切实际，导致磨人提前平——计划本身就不合理。',
+    lessons:'1. 小本金 ≠ 可以乱来。2% 风险铁律对 16U 同样适用：单笔最多亏 0.32U，意味着这种仓位根本开不出来——说明这笔一开始就不该做。\n2. 杠杆 + 爆仓价当止损 = 赌方向，容错极低。进场即应挂真实止损单。\n3. 亏损加仓（摊平）是账户清零的捷径。错了应该止损，而不是加仓摊平。\n4. 进场要有结构依据（趋势 / 突破回踩 / 量能确认），不是"看到跌了"就追。\n5. 止盈要分批、合理，挂太远只会让自己磨到提前平，等于没计划。\n6. 这笔能盈利是运气（价格最后回头了），同样的操作做 10 次，账户早归零。靠运气赚的钱会靠实力亏回去。',
+    redo:'- 不用 5x，杠杆降到 2x 以内；进场即挂真实止损，绝不靠爆仓价。\n- 严格按 2% 风险反推仓位：16U 账户单笔最多亏 0.32U → 这个仓位开不出来 → 放弃这笔。\n- 价格逆势上行时，到止损就止损，绝不补仓摊平。\n- 止盈分批：到第一目标先平一半锁定利润，剩余用移动止损（如 4H 前低）跟踪。\n- 永续合约小币种 + 高杠杆 + 没止损 = 三件套，凑齐必爆，少一件都能活。',
+    selfScore:{planExecution:1,entryTiming:1,exitTiming:3,riskMgmt:1,emotionCtrl:1},
+    img:'',savedAt:Date.now()
+  };
+  d.eval=evaluate(d);
+  return d;
+}
+
+/* ---------- 初始化 ---------- */
+(async function init(){
+  try{
+    await load();
+    await loadChecklist();
+  }catch(e){console.error('初始化加载失败:',e)}
+  syncReady=true;
+  renderScores();
+  renderTags();
+  renderScr();
+  renderTierInfo();
+  document.getElementById('f_date').value=today();
+  liveCalc();
+  calcSwing();
+  go('dashboard');
+})();
+</script>
+</body>
+</html>
