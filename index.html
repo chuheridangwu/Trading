@@ -441,6 +441,13 @@
           </div>
         </div>
 
+        <div class="targets-panel">
+          <label>分批买入 / 补仓 <span class="hint">不同价位加仓记录 · 自动算加权均价并填入上方入场价/仓位数量</span></label>
+          <div id="lotList" style="display:flex;flex-direction:column;gap:6px"></div>
+          <button class="btn sm" onclick="addLot()" style="font-size:11px">+ 添加买入档位</button>
+          <div id="lotSummary" class="help" style="margin-top:6px"></div>
+        </div>
+
         <div class="param-group">
           <div class="pg-title">资金与杠杆</div>
           <div class="param-grid" style="grid-template-columns:repeat(3,1fr)">
@@ -801,6 +808,7 @@ document.querySelectorAll('#nav a').forEach(a=>a.onclick=()=>go(a.dataset.page))
 /* ---------- 标签输入 ---------- */
 let curTags=[];
 let targetsData=[];
+let lotsData=[];
 function renderTags(){
   const box=document.getElementById('f_tags');
   box.querySelectorAll('.tag').forEach(t=>t.remove());
@@ -1062,6 +1070,8 @@ function saveEntry(){
   const date=getVal('f_date'),symbol=getVal('f_symbol');
   if(!date||!symbol||!scores.planExecution){toast('请填写必填项与自评打分');return}
   const status=document.getElementById('f_status').checked?'closed':'open';
+  if(lotsData.some(t=>t.price>0&&!(t.size>0))){toast('⚠ 有买入档位未填数量，已忽略该档');}
+  const lots=lotsData.filter(t=>t.price>0&&t.size>0).map(t=>({price:t.price,size:t.size}));
   const targets=targetsData.filter(t=>t.price>0).map(t=>({price:t.price,ratio:t.ratio,hit:t.hit,actualExit:t.hit?(t.actualExit||t.price):0}));
   const d={
     id:editMode?document.getElementById('editId').value:uid(),
@@ -1071,6 +1081,7 @@ function saveEntry(){
     entry:getNum('f_entry'),exit:status==='closed'?getNum('f_exit'):0,size:getNum('f_size'),stop:getNum('f_stop'),
     target:targets.length?targets[0].price:0,account:getNum('f_account'),fees:getNum('f_fees'),leverage:getNum('f_leverage')||1,
     marginMode:getMarginMode(),
+    lots:lots.length?lots:undefined,
     targets:targets.length?targets:undefined,
     trend:getVal('f_trend'),regime:getVal('f_regime'),
     entryReason:getVal('f_entryReason'),exitReason:status==='closed'?getVal('f_exitReason'):'',
@@ -1102,6 +1113,7 @@ function resetForm(){
   document.getElementById('exitField').style.display='';
   document.getElementById('exitReasonField').style.display='';
   targetsData=[];renderTargets();
+  lotsData=[];renderLots();
   liveCalc();
 }
 
@@ -1164,6 +1176,60 @@ function delTarget(i){
   targetsData.splice(i,1);
   renderTargets();
 }
+
+/* ---------- 分批买入 / 补仓 ---------- */
+function renderLots(){
+  const box=document.getElementById('lotList');
+  if(!box)return;
+  let h='';
+  lotsData.forEach((t,i)=>{
+    h+=`<div class="target-row">
+      <div class="target-head">
+        <span class="target-idx">买入 #${i+1}${i>0?' · 补仓':''}</span>
+        <button class="target-del" onclick="delLot(${i})">移除</button>
+      </div>
+      <div class="row" style="gap:10px">
+        <div class="field" style="margin-bottom:0">
+          <label>买入价</label>
+          <input type="number" step="any" value="${t.price||''}" onchange="lotsData[${i}].price=Number(this.value);renderLots()" placeholder="65000">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>数量 <span class="hint">币数</span></label>
+          <input type="number" step="any" value="${t.size||''}" onchange="lotsData[${i}].size=Number(this.value);renderLots()" placeholder="0.5">
+        </div>
+      </div>
+    </div>`;
+  });
+  box.innerHTML=h;
+  syncLotsToEntry();
+}
+function syncLotsToEntry(){
+  const entryEl=document.getElementById('f_entry');
+  const sizeEl=document.getElementById('f_size');
+  const sum=document.getElementById('lotSummary');
+  if(!entryEl||!sizeEl||!sum)return;
+  const complete=lotsData.filter(t=>t.price>0&&t.size>0);
+  const incomplete=lotsData.filter(t=>t.price>0&&!(t.size>0));
+  if(complete.length===0){
+    entryEl.readOnly=false;sizeEl.readOnly=false;
+    sum.textContent=lotsData.length?'请填写每档的「买入价 + 数量」以自动计算加权均价':'';
+    liveCalc();
+    return;
+  }
+  const totSize=complete.reduce((s,t)=>s+t.size,0);
+  const totVal=complete.reduce((s,t)=>s+t.price*t.size,0);
+  const avg=totVal/totSize;
+  entryEl.value=String(+avg.toFixed(8));
+  sizeEl.value=String(+totSize.toFixed(8));
+  const locked=incomplete.length===0;
+  entryEl.readOnly=locked;sizeEl.readOnly=locked;
+  sum.textContent=`加权均价 ${entryEl.value} × 总数量 ${sizeEl.value}（${complete.length} 档）已自动填入入场价与仓位数量`+
+    (incomplete.length?` · ⚠ ${incomplete.length} 档未填数量，暂未计入`:'')+
+    (locked?' · 若改手填请先清空买入档位':'');
+  liveCalc();
+}
+function addLot(){lotsData.push({price:0,size:0});renderLots()}
+function delLot(i){lotsData.splice(i,1);renderLots()}
 
 /* ---------- 仪表盘 ---------- */
 function renderDashboard(){
@@ -1456,6 +1522,14 @@ function showDetail(id){
   else h+='<div style="color:var(--txt2);font-size:13px;margin-bottom:8px">✓ 已平仓</div>';
   h+=kv('方向',`<span class="pill ${e.direction}">${e.direction==='long'?'做多':'做空'}</span>`);
   h+=kv('入场价',e.entry);
+  if(e.lots&&e.lots.length){
+    let lh='<div style="display:flex;flex-direction:column;gap:3px;margin-top:2px">';
+    e.lots.forEach((l,i)=>{
+      lh+=`<div style="font-size:12px;color:var(--txt2)">${i+1}. ${fmt(l.price)} × ${l.size}</div>`;
+    });
+    lh+='</div>';
+    h+=`<div class="kv"><span class="k">分批买入</span><span class="v">${lh}</span></div>`;
+  }
   h+=kv('出场价',e.status==='open'?'—':e.exit);
   h+=kv('仓位数量',e.size);
   h+=kv('止损价',e.stop);
@@ -1577,6 +1651,10 @@ function editEntry(id){
   else if(e.target){targetsData=[{price:e.target,ratio:100,actualExit:0,hit:false}];}
   else{targetsData=[];}
   renderTargets();
+  // 恢复分批买入
+  if(e.lots&&e.lots.length)lotsData=e.lots.map(l=>({price:l.price,size:l.size}));
+  else lotsData=[];
+  renderLots();
   setVal('f_trend',e.trend);setVal('f_regime',e.regime);
   setVal('f_entryReason',e.entryReason);setVal('f_exitReason',e.exitReason);
   setVal('f_emotion_entry',e.emotionEntry);setVal('f_emotion_hold',e.emotionHold);setVal('f_emotion_after',e.emotionAfter);
