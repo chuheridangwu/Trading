@@ -281,6 +281,28 @@
 .toggle input:checked+.toggle-slider{background:var(--green);border-color:var(--green)}
 .toggle-slider::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:1px;left:1px;transition:.2s}
 .toggle input:checked+.toggle-slider::after{left:17px}
+/* 保证金模式分段按钮 */
+.margin-mode-group{display:inline-flex;border-radius:7px;overflow:hidden;border:1px solid var(--border)}
+.margin-mode-btn{background:var(--bg3);color:var(--txt2);border:none;padding:5px 13px;font-size:12px;cursor:pointer;font-family:inherit;transition:.15s;flex:1;text-align:center;border-right:1px solid var(--border);white-space:nowrap}
+.margin-mode-btn:last-child{border-right:none}
+.margin-mode-btn.active{background:var(--blue);color:#041020;font-weight:600}
+.margin-mode-btn:not(.active):hover{background:#222a36;color:var(--txt)}
+.margin-mode-desc{font-size:11px;color:var(--txt3);margin-top:6px;line-height:1.5}
+/* 交易参数分组布局 */
+.param-group{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.param-group .pg-title{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.param-group .pg-title::before{content:"";width:3px;height:12px;background:var(--blue);border-radius:2px}
+.param-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.param-grid .field{margin-bottom:0}
+@media(max-width:1000px){.param-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.param-grid{grid-template-columns:1fr}}
+.margin-row{display:flex;align-items:center;gap:18px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:12px}
+.margin-row .field{flex:0 0 auto}
+.margin-row .margin-mode-desc{flex:1;font-size:12.5px;color:var(--txt2);line-height:1.7;border-left:2px solid var(--border);padding-left:14px;margin-top:0;min-height:36px;display:flex;align-items:center}
+.targets-panel{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:12px}
+.targets-panel>label{display:block;font-size:12px;color:var(--txt2);margin-bottom:8px;font-weight:500}
+.targets-panel .btn{margin-top:8px}
+@media(max-width:760px){.margin-row{flex-direction:column;align-items:stretch;gap:10px}.margin-row .margin-mode-desc{border-left:none;border-top:1px solid var(--border);padding-left:0;padding-top:10px;min-height:0}}
  </style>
 </head>
 <body>
@@ -318,6 +340,10 @@
 
       <!-- 资金曲线：由 JS 动态渲染 -->
       <div id="equityCurveBox"></div>
+
+      <!-- R 倍数分布 + 策略绩效拆分 -->
+      <div id="rDistBox"></div>
+      <div id="setupBreakBox"></div>
 
       <!-- 近期日志 -->
       <div class="card" style="margin-top:16px">
@@ -404,31 +430,42 @@
         </div>
 
         <div class="section-title" style="margin-top:20px">② 交易参数 <span class="hint" style="text-transform:none;font-weight:400">—— 用于自动计算盈亏、R倍数、风险%</span></div>
-        <div class="row">
-          <div class="field"><label>入场价 Entry <span class="req">*</span></label><input type="number" step="any" id="f_entry" required></div>
-          <div class="field" id="exitField"><label>出场价 Exit <span class="req">*</span></label><input type="number" step="any" id="f_exit" required></div>
-          <div class="field"><label>仓位数量 Size <span class="req">*</span> <span class="hint">币数 / 股数 / 合约数</span></label><input type="number" step="any" id="f_size" required></div>
-          <div class="field"><label>止损价 Stop <span class="req">*</span></label><input type="number" step="any" id="f_stop" required></div>
-          <div class="field">
-            <label>止盈目标 <span class="hint">分批出场计划</span></label>
-            <div id="targetList" style="display:flex;flex-direction:column;gap:6px"></div>
-            <button class="btn sm" onclick="addTarget()" style="margin-top:6px;font-size:11px">+ 添加目标位</button>
-          </div>
-          <div class="field"><label>账户总资金 <span class="req">*</span> <span class="hint">用于算仓位占比与爆仓风险</span></label><input type="number" step="any" id="f_account" required></div>
-          <div class="field"><label>手续费 Fees</label><input type="number" step="any" id="f_fees" value="0"></div>
-          <div class="field" id="leverageField"><label>杠杆 Leverage <span class="hint">合约倍数，现货填1</span></label><input type="number" step="any" id="f_leverage" value="1"></div>
-          <div class="field">
-            <label>保证金模式</label>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:13px">逐仓</span>
-              <label class="toggle" style="display:flex;align-items:center">
-                <input type="checkbox" id="f_marginMode" checked onchange="liveCalc()">
-                <span class="toggle-slider"></span>
-              </label>
-              <span style="font-size:13px">全仓</span>
-            </div>
+
+        <div class="param-group">
+          <div class="pg-title">价格与仓位</div>
+          <div class="param-grid">
+            <div class="field"><label>入场价 Entry <span class="req">*</span></label><input type="number" step="any" id="f_entry" required></div>
+            <div class="field" id="exitField"><label>出场价 Exit <span class="req">*</span></label><input type="number" step="any" id="f_exit" required></div>
+            <div class="field"><label>止损价 Stop <span class="req">*</span></label><input type="number" step="any" id="f_stop" required></div>
+            <div class="field"><label>仓位数量 Size <span class="req">*</span> <span class="hint">币数 / 股数 / 合约数</span></label><input type="number" step="any" id="f_size" required></div>
           </div>
         </div>
+
+        <div class="param-group">
+          <div class="pg-title">资金与杠杆</div>
+          <div class="param-grid" style="grid-template-columns:repeat(3,1fr)">
+            <div class="field"><label>账户总资金 <span class="req">*</span> <span class="hint">用于算仓位占比与爆仓风险</span></label><input type="number" step="any" id="f_account" required></div>
+            <div class="field"><label>手续费 Fees</label><input type="number" step="any" id="f_fees" value="0"></div>
+            <div class="field" id="leverageField"><label>杠杆 Leverage <span class="hint">合约倍数，现货填1</span></label><input type="number" step="any" id="f_leverage" value="1"></div>
+          </div>
+          <div class="margin-row" style="margin-bottom:0">
+            <div class="field" style="margin:0;flex:0 0 auto">
+              <label>保证金模式</label>
+              <div class="margin-mode-group" id="marginModeGroup">
+                <button class="margin-mode-btn active" data-mode="isolated" onclick="setMarginMode('isolated')" type="button">逐仓 Isolated</button>
+                <button class="margin-mode-btn" data-mode="cross" onclick="setMarginMode('cross')" type="button">全仓 Cross</button>
+              </div>
+            </div>
+            <div class="margin-mode-desc" id="marginModeDesc">保证金独立计算，单一仓位爆仓不影响其他仓位</div>
+          </div>
+        </div>
+
+        <div class="targets-panel">
+          <label>止盈目标 <span class="hint">分批出场计划</span></label>
+          <div id="targetList" style="display:flex;flex-direction:column;gap:6px"></div>
+          <button class="btn sm" onclick="addTarget()" style="font-size:11px">+ 添加目标位</button>
+        </div>
+
         <div class="callout" id="liveCalc">填写交易参数后将自动计算 盈亏 / R倍数 / 风险占比 / 计划盈亏比</div>
 
         <div class="field"><label>交易状态</label>
@@ -684,6 +721,9 @@ let entries=[];
 let curImg='';
 let editMode=false;
 let syncReady=false;
+let livePrices={};
+function loadLivePrices(){try{livePrices=JSON.parse(localStorage.getItem('tj_live_prices_v1')||'{}')||{}}catch(e){livePrices={}}}
+function saveLivePrices(){try{localStorage.setItem('tj_live_prices_v1',JSON.stringify(livePrices))}catch(e){}}
 
 /* ---------- 存储 (Supabase / localStorage 双模 · 静默回退) ---------- */
 async function load(){
@@ -813,6 +853,21 @@ function handleImg(e){
 
 /* ---------- 实时计算 ---------- */
 function cc(l,v,c,hi){return '<div class="calc-card'+(hi?' hi':'')+'"><div class="cl">'+l+'</div><div class="cv" style="color:'+(c||'var(--txt)')+'">'+v+'</div></div>'}
+function setMarginMode(mode){
+  document.querySelectorAll('.margin-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+  var desc=document.getElementById('marginModeDesc');
+  if(desc)desc.textContent=mode==='isolated'?'保证金独立计算，单一仓位爆仓不影响其他仓位':'保证金共享，任一仓位爆仓可能波及账户全部余额';
+  liveCalc();
+}
+function getMarginMode(){
+  var btn=document.querySelector('.margin-mode-btn.active');
+  return btn?btn.dataset.mode:'isolated';
+}
+function initMarginMode(mode){
+  document.querySelectorAll('.margin-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+  var desc=document.getElementById('marginModeDesc');
+  if(desc)desc.textContent=mode==='isolated'?'保证金独立计算，单一仓位爆仓不影响其他仓位':'保证金共享，任一仓位爆仓可能波及账户全部余额';
+}
 function liveCalc(){
   const e=getNum('f_entry'),x=getNum('f_exit'),st=getNum('f_stop'),ac=getNum('f_account'),fe=getNum('f_fees'),dir=document.getElementById('f_direction').value,L=Math.max(1,getNum('f_leverage')||1);
   const tg=targetsData.length>0?targetsData[0].price:0;
@@ -833,7 +888,7 @@ function liveCalc(){
   const lossPct=hasSize&&hasStop&&ac>0?riskAmt/ac*100:0; // 到止损亏损占账户%
   const rMult=hasSize&&hasExit&&riskAmt>0?pnl/riskAmt:0;
   const planRR=tg>0&&hasStop?(Math.abs(tg-e)/Math.abs(e-st)):0;
-  const marginMode=document.getElementById('f_marginMode').checked?'isolated':'cross';
+  const marginMode=getMarginMode();
   let liq;
   if(marginMode==='cross'&&ac>0){
     if(dirSign>0){
@@ -1015,7 +1070,7 @@ function saveEntry(){
     tags:[...curTags],
     entry:getNum('f_entry'),exit:status==='closed'?getNum('f_exit'):0,size:getNum('f_size'),stop:getNum('f_stop'),
     target:targets.length?targets[0].price:0,account:getNum('f_account'),fees:getNum('f_fees'),leverage:getNum('f_leverage')||1,
-    marginMode:document.getElementById('f_marginMode').checked?'isolated':'cross',
+    marginMode:getMarginMode(),
     targets:targets.length?targets:undefined,
     trend:getVal('f_trend'),regime:getVal('f_regime'),
     entryReason:getVal('f_entryReason'),exitReason:status==='closed'?getVal('f_exitReason'):'',
@@ -1029,6 +1084,7 @@ function saveEntry(){
   const idx=entries.findIndex(e=>e.id===d.id);
   if(idx>=0)entries[idx]=d;else entries.unshift(d);
   persist();
+  if(status==='closed'&&livePrices[d.id]){delete livePrices[d.id];saveLivePrices()}
   editMode=false;curImg='';
   toast('✓ 已保存 · 综合评分 '+d.eval.score.toFixed(0)+'/100 · 等级 '+d.eval.grade);
   setTimeout(()=>showDetail(d.id),300);
@@ -1113,28 +1169,34 @@ function delTarget(i){
 function renderDashboard(){
   const n=entries.length;
   const stats=document.getElementById('stats');
-  if(n===0){stats.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="big">📭</div>还没有日志<br>点击右上「+ 新建」开始第一笔，或去「数据管理」载入示范案例</div>';document.getElementById('recentTable').innerHTML='';document.getElementById('equityCurveBox').innerHTML='';return}
+  if(n===0){stats.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="big">📭</div>还没有日志<br>点击右上「+ 新建」开始第一笔，或去「数据管理」载入示范案例</div>';document.getElementById('recentTable').innerHTML='';document.getElementById('equityCurveBox').innerHTML='';document.getElementById('rDistBox').innerHTML='';document.getElementById('setupBreakBox').innerHTML='';return}
 
   const openTrades=entries.filter(e=>e.status==='open');
   let sth='';
   if(openTrades.length){
-    sth+='<div class="card" style="margin-bottom:14px"><div class="section-title" style="margin-top:0">当前持仓</div>';
+    sth+='<div class="card" style="margin-bottom:14px"><div class="section-title" style="margin-top:0">当前持仓 <span style="color:var(--txt3);font-weight:400;text-transform:none">输入现价实时算浮动盈亏 · 不计入统计</span></div>';
     openTrades.forEach(e=>{
       const fmt=n=>Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:8});
-      sth+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-        <div><b>${e.symbol}</b> <span class="pill ${e.direction}">${e.direction==='long'?'多':'空'}</span></div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="display:flex;gap:16px;font-size:12px">
+      const lp=livePrices[e.id]??e.entry;
+      sth+=`<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><b>${e.symbol}</b> <span class="pill ${e.direction}">${e.direction==='long'?'多':'空'}</span></div>
+          <div style="display:flex;align-items:center;gap:16px;font-size:12px">
             <span>入场 ${fmt(e.entry)}</span>
             <span>止损 ${fmt(e.stop)}</span>
             ${e.target?`<span>目标 ${fmt(e.target)}</span>`:''}
             <span>${e.leverage}x</span>
           </div>
-          <div style="display:flex;gap:6px;flex-shrink:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:11px;color:var(--txt3)">现价</span>
+              <input type="number" step="any" style="width:110px;background:var(--bg);border:1px solid var(--border);color:var(--txt);padding:5px 8px;border-radius:6px;font-size:12px;font-family:inherit" value="${lp}" id="lp-${e.id}" oninput="updateLive('${e.id}')">
+            </div>
             <button class="btn sm" onclick="go('detail');showDetail('${e.id}');setTimeout(()=>{const ni=document.getElementById('newNoteInput');if(ni)ni.focus()},200)" style="font-size:11px">+ 笔记</button>
             <button class="btn sm" onclick="editEntry('${e.id}')" style="font-size:11px">编辑</button>
           </div>
         </div>
+        <div id="lpout-${e.id}" style="display:flex;gap:18px;font-size:12px;margin-top:6px;margin-left:110px;flex-wrap:wrap"></div>
       </div>`;
     });
     sth+='</div>';
@@ -1174,6 +1236,8 @@ function renderDashboard(){
   h+='</tbody>';
   document.getElementById('recentTable').innerHTML=h;
   renderEquityCurve();
+  renderRDist();
+  renderSetupBreakdown();
 }
 
 function fmtY(v){return Math.abs(v)>=1000?(v/1000).toFixed(0)+'k':v.toFixed(0)}
@@ -1244,6 +1308,109 @@ function renderEquityCurve(){
     `<span>胜率 <b>${(winCount/closed.length*100).toFixed(0)}%</b></span>`;
 }
 
+/* ---------- 持仓浮动盈亏 ---------- */
+function updateLive(id){
+  const inp=document.getElementById('lp-'+id);
+  const out=document.getElementById('lpout-'+id);
+  if(!inp||!out)return;
+  const p=parseFloat(inp.value);
+  if(p>0)livePrices[id]=p;else delete livePrices[id];
+  saveLivePrices();
+  const e=entries.find(x=>x.id===id);
+  if(!e)return;
+  const pnl=(p-e.entry)*(e.size||0)*(e.direction==='long'?1:-1);
+  const riskAmt=Math.abs(e.entry-e.stop)*(e.size||0);
+  const r=riskAmt>0?pnl/riskAmt:0;
+  const pct=(e.direction==='long'?1:-1)*(p-e.entry)/e.entry*100;
+  const toStop=p>0?Math.abs(p-e.stop)/e.stop*100:0;
+  const toTgt=(p>0&&e.target)?Math.abs(p-e.target)/e.target*100:null;
+  const pc=v=>v>=0?'var(--green)':'var(--red)';
+  const fmt=n=>Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:8});
+  out.innerHTML=
+    `<span>浮动盈亏 <b style="color:${pc(pnl)}">${fmt(pnl)}</b></span>`+
+    `<span>浮动R <b style="color:${pc(r)}">${r.toFixed(2)}R</b></span>`+
+    `<span>距入场 ${pct>=0?'+':''}${pct.toFixed(1)}%</span>`+
+    `<span>距止损 <b style="color:var(--red)">${toStop.toFixed(1)}%</b></span>`+
+    (toTgt!=null?`<span>距目标 <b style="color:var(--green)">${toTgt.toFixed(1)}%</b></span>`:'');
+}
+
+/* ---------- R 倍数分布 ---------- */
+function renderRDist(){
+  const box=document.getElementById('rDistBox');
+  if(!box)return;
+  const closed=entries.filter(e=>e.status!=='open'||!e.status);
+  const head='<div class="card" style="margin-top:16px"><div class="section-title" style="margin-top:0">R 倍数分布 <span style="color:var(--txt3);font-weight:400;text-transform:none">全部已平仓 · 负R为红 / 0~1R为黄 / ≥1R为绿</span></div>';
+  if(closed.length<3){
+    box.innerHTML=head+'<div class="empty" style="padding:16px">至少需要 3 笔已平仓交易才能绘制分布</div></div>';
+    return;
+  }
+  const counts=new Array(7).fill(0);
+  closed.forEach(e=>{
+    const r=e.eval.rMult;
+    counts[r<-2?0:r<-1?1:r<0?2:r<1?3:r<2?4:r<3?5:6]++;
+  });
+  const maxC=Math.max(...counts,1);
+  const W=800,H=190,padL=40,padR=16,padT=10,padB=30;
+  const plotW=W-padL-padR,plotH=H-padT-padB;
+  const labels=['≤-2','-2~-1','-1~0','0~1','1~2','2~3','≥3'];
+  const colors=['var(--redbg)','var(--redbg)','var(--redbg)','var(--yellowbg)','var(--greenbg)','var(--greenbg)','var(--greenbg)'];
+  const borders=['var(--red)','var(--red)','var(--red)','var(--yellow)','var(--green)','var(--green)','var(--green)'];
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:190px">`;
+  for(let i=0;i<=4;i++){
+    const yy=padT+(i/4)*plotH;
+    svg+=`<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="4 3"/>`;
+  }
+  counts.forEach((c,i)=>{
+    const bh=c/maxC*plotH;
+    const bw=plotW/7;
+    const x=padL+i*bw+bw*0.14;
+    const w=bw*0.72;
+    svg+=`<rect x="${x}" y="${padT+plotH-bh}" width="${w}" height="${Math.max(bh,c>0?2:0)}" fill="${colors[i]}" stroke="${borders[i]}" stroke-width="1" rx="2"/>`;
+    if(c>0)svg+=`<text x="${x+w/2}" y="${padT+plotH-bh-5}" text-anchor="middle" fill="var(--txt)" font-size="12" font-weight="700">${c}</text>`;
+    svg+=`<text x="${x+w/2}" y="${H-8}" text-anchor="middle" fill="var(--txt2)" font-size="10">${labels[i]}</text>`;
+  });
+  svg+='</svg>';
+  const n=closed.length;
+  const win1=closed.filter(e=>e.eval.rMult>=1).length;
+  const loss1=closed.filter(e=>e.eval.rMult<=-1).length;
+  const be=closed.filter(e=>e.eval.rMult>=0&&e.eval.rMult<1).length;
+  const eq='<div style="display:flex;gap:20px;font-size:12px;margin-top:8px;flex-wrap:wrap;color:var(--txt2)">'+
+    `<span>≥1R 盈利 <b style="color:var(--green)">${win1}</b> 笔</span>`+
+    `<span>0~1R 弱盈利 <b style="color:var(--yellow)">${be}</b> 笔</span>`+
+    `<span>≤-1R 亏损 <b style="color:var(--red)">${loss1}</b> 笔</span>`+
+    `<span style="color:var(--txt3)">理想：≤-1R 单子尽量控制在止损计划内，≥2R 单子靠耐力多拿</span></div>`;
+  box.innerHTML=head+svg+eq+'</div>';
+}
+
+/* ---------- 策略绩效拆分 ---------- */
+function renderSetupBreakdown(){
+  const box=document.getElementById('setupBreakBox');
+  if(!box)return;
+  const closed=entries.filter(e=>e.status!=='open'||!e.status);
+  const head='<div class="card" style="margin-top:16px"><div class="section-title" style="margin-top:0">策略绩效拆分 <span style="color:var(--txt3);font-weight:400;text-transform:none">按『交易策略』分组 · 仅统计已平仓</span></div>';
+  if(!closed.length){
+    box.innerHTML=head+'<div class="empty" style="padding:16px">暂无已平仓日志</div></div>';
+    return;
+  }
+  const grp={};
+  closed.forEach(e=>{
+    const k=e.setup||'未填写';
+    grp[k]=grp[k]||{n:0,wins:0,pnl:0,totR:0};
+    const g=grp[k];
+    g.n++;g.pnl+=e.eval.pnl;g.totR+=e.eval.rMult;
+    if(e.eval.pnl>0)g.wins++;
+  });
+  const rows=Object.entries(grp).sort((a,b)=>b[1].pnl-a[1].pnl);
+  let h='<div class="scroll-x"><table><thead><tr><th>策略</th><th>笔数</th><th>胜率</th><th>总盈亏</th><th>总R</th><th>平均R/笔</th></tr></thead><tbody>';
+  rows.forEach(([k,g])=>{
+    const winRate=g.wins/g.n*100;
+    const avgR=g.totR/g.n;
+    h+=`<tr><td>${escapeHtml(k)}</td><td>${g.n}</td><td style="color:${winRate>=50?'var(--green)':'var(--red)'}">${winRate.toFixed(0)}%</td><td class="num" style="color:${g.pnl>=0?'var(--green)':'var(--red)'}">${fmt(g.pnl)}</td><td class="num">${g.totR.toFixed(1)}R</td><td class="num" style="color:${avgR>=0?'var(--green)':'var(--red)'}">${avgR.toFixed(2)}R</td></tr>`;
+  });
+  h+='</tbody></table></div></div>';
+  box.innerHTML=head+h;
+}
+
 /* ---------- 列表 ---------- */
 function renderList(){
   const fm=document.getElementById('filterMarket').value;
@@ -1305,6 +1472,7 @@ function showDetail(id){
   }
   h+=kv('手续费',fmt(e.fees||0));
   h+=kv('账户资金',fmt(e.account));
+  h+=kv('保证金模式',e.marginMode==='cross'?'全仓 Cross':'逐仓 Isolated');
   h+='</div>';
 
   // 右：自动评测
@@ -1413,7 +1581,7 @@ function editEntry(id){
   setVal('f_entryReason',e.entryReason);setVal('f_exitReason',e.exitReason);
   setVal('f_emotion_entry',e.emotionEntry);setVal('f_emotion_hold',e.emotionHold);setVal('f_emotion_after',e.emotionAfter);
   setNum('f_leverage',e.leverage||1);
-  const mm=e.marginMode||'isolated';document.getElementById('f_marginMode').checked=mm==='isolated';
+  const mm=e.marginMode||'isolated';initMarginMode(mm);
   setVal('f_emotionNote',e.emotionNote);setVal('f_mistakes',e.mistakes);
   setVal('f_lessons',e.lessons);setVal('f_redo',e.redo);
   scores={...e.selfScore};renderScores();
@@ -2236,6 +2404,7 @@ function sampleDEXE(){
     await loadChecklist();
   }catch(e){console.error('初始化加载失败:',e)}
   syncReady=true;
+  loadLivePrices();
   renderScores();
   renderTags();
   renderScr();
