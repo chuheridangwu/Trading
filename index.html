@@ -434,15 +434,19 @@
         <div class="param-group">
           <div class="pg-title">价格与仓位</div>
           <div class="param-grid">
-            <div class="field"><label>入场价 Entry <span class="req">*</span></label><input type="number" step="any" id="f_entry" required></div>
+            <div class="field"><label>入场价 Entry <span class="req">*</span></label><input type="number" step="any" id="f_entry" required oninput="syncAmtToSize()"></div>
             <div class="field" id="exitField"><label>出场价 Exit <span class="req">*</span></label><input type="number" step="any" id="f_exit" required></div>
             <div class="field"><label>止损价 Stop <span class="req">*</span></label><input type="number" step="any" id="f_stop" required></div>
-            <div class="field"><label>仓位数量 Size <span class="req">*</span> <span class="hint">币数 / 股数 / 合约数</span></label><input type="number" step="any" id="f_size" required></div>
+            <div class="field"><label>仓位数量 Size <span class="req">*</span> <span class="hint">币数 / 股数 / 合约数</span></label><input type="number" step="any" id="f_size" required>
+              <label style="margin-top:10px">投入金额 U <span class="hint">可选 · 自动算数量</span></label>
+              <input type="number" step="any" id="f_amt" placeholder="如 1000" oninput="syncAmtToSize()">
+              <div class="help" id="amtHint"></div>
+            </div>
           </div>
         </div>
 
         <div class="targets-panel">
-          <label>分批买入 / 补仓 <span class="hint">不同价位加仓记录 · 自动算加权均价并填入上方入场价/仓位数量</span></label>
+          <label>分批买入 / 补仓 <span class="hint">填「买入价 + 数量」或「买入价 + 投入金额」，自动算加权均价</span></label>
           <div id="lotList" style="display:flex;flex-direction:column;gap:6px"></div>
           <button class="btn sm" onclick="addLot()" style="font-size:11px">+ 添加买入档位</button>
           <div id="lotSummary" class="help" style="margin-top:6px"></div>
@@ -453,7 +457,7 @@
           <div class="param-grid" style="grid-template-columns:repeat(3,1fr)">
             <div class="field"><label>账户总资金 <span class="req">*</span> <span class="hint">用于算仓位占比与爆仓风险</span></label><input type="number" step="any" id="f_account" required></div>
             <div class="field"><label>手续费 Fees</label><input type="number" step="any" id="f_fees" value="0"></div>
-            <div class="field" id="leverageField"><label>杠杆 Leverage <span class="hint">合约倍数，现货填1</span></label><input type="number" step="any" id="f_leverage" value="1"></div>
+            <div class="field" id="leverageField"><label>杠杆 Leverage <span class="hint">合约倍数，现货填1</span></label><input type="number" step="any" id="f_leverage" value="1" oninput="syncAmtToSize()"></div>
           </div>
           <div class="margin-row" style="margin-bottom:0">
             <div class="field" style="margin:0;flex:0 0 auto">
@@ -665,6 +669,43 @@
           </div>
           <div style="margin-top:14px"><button class="btn primary" onclick="calcPct()">计算</button></div>
           <div id="pctOut" style="margin-top:14px"></div>
+        </div>
+
+        <!-- 加仓爆仓模拟器 -->
+        <div class="card" style="grid-column:1/-1">
+          <div class="section-title">加仓爆仓模拟器 <span style="color:var(--txt3);font-weight:400;text-transform:none">固定资金分批加仓 · 实时算数量/加权均价/爆仓价</span></div>
+          <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
+            <div class="field" style="margin:0"><label>账户总资金 U <span class="hint">可选</span></label><input type="number" step="any" id="simAccount" placeholder="如 10000"></div>
+            <div class="field" style="margin:0"><label>杠杆 ×</label><input type="number" step="any" id="simLev" value="10"></div>
+            <div class="field" style="margin:0"><label>当前价 <span class="hint">可选 · 算距爆仓%</span></label><input type="number" step="any" id="simPrice" placeholder="如 1.2"></div>
+            <div class="field" style="margin:0"><label>保证金模式</label>
+              <div class="margin-mode-group" id="simMM">
+                <button class="margin-mode-btn active" data-mode="isolated" onclick="simSetMode('isolated')" type="button">逐仓</button>
+                <button class="margin-mode-btn" data-mode="cross" onclick="simSetMode('cross')" type="button">全仓</button>
+              </div>
+            </div>
+          </div>
+          <div id="simLotList" style="display:flex;flex-direction:column;gap:6px;margin-top:12px"></div>
+          <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
+            <button class="btn sm primary" onclick="addSimLot()" style="font-size:12px">+ 添加买入档位</button>
+            <span id="simHint" class="help" style="margin:0">例：逐仓 1U 买 100U、2U 再补 100U → 看每档爆仓价；全仓则看合并爆仓价</span>
+          </div>
+          <div id="simOut" style="margin-top:12px"></div>
+        </div>
+
+        <!-- 智能仓位控制 -->
+        <div class="card" style="grid-column:1/-1">
+          <div class="section-title">智能仓位控制 (Risk-based Sizer) <span style="color:var(--txt3);font-weight:400;text-transform:none">单笔风险 % × 账户 → 反推仓位 · 波动率与爆仓校验</span></div>
+          <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr;gap:12px">
+            <div class="field" style="margin:0"><label>账户资金 U <span class="req">*</span></label><input type="number" step="any" id="szAccount" placeholder="如 10000"></div>
+            <div class="field" style="margin:0"><label>单笔风险 % <span class="hint">建议≤2</span></label><input type="number" step="any" id="szRisk" value="2"></div>
+            <div class="field" style="margin:0"><label>入场价 <span class="req">*</span></label><input type="number" step="any" id="szEntry" placeholder="如 200000"></div>
+            <div class="field" style="margin:0"><label>止损价 <span class="req">*</span></label><input type="number" step="any" id="szStop" placeholder="如 195000"></div>
+            <div class="field" style="margin:0"><label>杠杆 ×</label><input type="number" step="any" id="szLev" value="1"></div>
+            <div class="field" style="margin:0"><label>波动率 % <span class="hint">可选 · 如1H/4H 平均波幅</span></label><input type="number" step="any" id="szVol" placeholder="如 3"></div>
+          </div>
+          <div style="margin-top:12px"><button class="btn primary" onclick="calcSmartSize()">计算应开仓位</button></div>
+          <div id="szOut" style="margin-top:12px"></div>
         </div>
 
       </div>
@@ -1114,6 +1155,7 @@ function resetForm(){
   document.getElementById('exitReasonField').style.display='';
   targetsData=[];renderTargets();
   lotsData=[];renderLots();
+  const ah=document.getElementById('amtHint');if(ah)ah.textContent='';
   liveCalc();
 }
 
@@ -1181,8 +1223,10 @@ function delTarget(i){
 function renderLots(){
   const box=document.getElementById('lotList');
   if(!box)return;
+  const L=Math.max(1,getNum('f_leverage')||1);
   let h='';
   lotsData.forEach((t,i)=>{
+    const amt=t.amt>0?t.amt:(t.price>0&&t.size>0?t.price*t.size/L:0);
     h+=`<div class="target-row">
       <div class="target-head">
         <span class="target-idx">买入 #${i+1}${i>0?' · 补仓':''}</span>
@@ -1191,11 +1235,15 @@ function renderLots(){
       <div class="row" style="gap:10px">
         <div class="field" style="margin-bottom:0">
           <label>买入价</label>
-          <input type="number" step="any" value="${t.price||''}" onchange="lotsData[${i}].price=Number(this.value);renderLots()" placeholder="65000">
+          <input type="number" step="any" value="${t.price||''}" onchange="lotsData[${i}].price=Number(this.value);if(lotsData[${i}].amt>0&&this.value>0){lotsData[${i}].size=lotsData[${i}].amt*Math.max(1,getNum('f_leverage')||1)/this.value}renderLots()" placeholder="65000">
         </div>
         <div class="field" style="margin-bottom:0">
           <label>数量 <span class="hint">币数</span></label>
-          <input type="number" step="any" value="${t.size||''}" onchange="lotsData[${i}].size=Number(this.value);renderLots()" placeholder="0.5">
+          <input type="number" step="any" value="${t.size||''}" onchange="lotsData[${i}].size=Number(this.value);delete lotsData[${i}].amt;renderLots()" placeholder="0.5">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>投入金额 U <span class="hint">可选</span></label>
+          <input type="number" step="any" value="${amt||''}" onchange="lotsData[${i}].amt=Number(this.value);if(lotsData[${i}].price>0&&this.value>0)lotsData[${i}].size=lotsData[${i}].amt*Math.max(1,getNum('f_leverage')||1)/lotsData[${i}].price;renderLots()" placeholder="如 1000">
         </div>
       </div>
     </div>`;
@@ -1208,28 +1256,55 @@ function syncLotsToEntry(){
   const sizeEl=document.getElementById('f_size');
   const sum=document.getElementById('lotSummary');
   if(!entryEl||!sizeEl||!sum)return;
+  const L=Math.max(1,getNum('f_leverage')||1);
   const complete=lotsData.filter(t=>t.price>0&&t.size>0);
   const incomplete=lotsData.filter(t=>t.price>0&&!(t.size>0));
   if(complete.length===0){
     entryEl.readOnly=false;sizeEl.readOnly=false;
-    sum.textContent=lotsData.length?'请填写每档的「买入价 + 数量」以自动计算加权均价':'';
+    sum.textContent=lotsData.length?'请填写每档的「买入价 + 数量（或投入金额）」以自动计算加权均价':'';
+    syncAmtToSize();
     liveCalc();
     return;
   }
   const totSize=complete.reduce((s,t)=>s+t.size,0);
   const totVal=complete.reduce((s,t)=>s+t.price*t.size,0);
+  const totAmt=complete.reduce((s,t)=>s+(t.amt>0?t.amt:t.price*t.size/L),0);
   const avg=totVal/totSize;
   entryEl.value=String(+avg.toFixed(8));
   sizeEl.value=String(+totSize.toFixed(8));
   const locked=incomplete.length===0;
   entryEl.readOnly=locked;sizeEl.readOnly=locked;
-  sum.textContent=`加权均价 ${entryEl.value} × 总数量 ${sizeEl.value}（${complete.length} 档）已自动填入入场价与仓位数量`+
-    (incomplete.length?` · ⚠ ${incomplete.length} 档未填数量，暂未计入`:'')+
+  sum.textContent=`加权均价 ${entryEl.value} × 总数量 ${sizeEl.value}（${complete.length} 档 · 总投入约 ${+totAmt.toFixed(2)}U）已自动填入入场价与仓位数量`+
+    (incomplete.length?` · ⚠ ${incomplete.length} 档未填完整，暂未计入`:'')+
     (locked?' · 若改手填请先清空买入档位':'');
   liveCalc();
 }
 function addLot(){lotsData.push({price:0,size:0});renderLots()}
 function delLot(i){lotsData.splice(i,1);renderLots()}
+
+/* ---------- 投入金额 → 数量 ---------- */
+function syncAmtToSize(){
+  const amt=getNum('f_amt');
+  const entry=getNum('f_entry');
+  const L=Math.max(1,getNum('f_leverage')||1);
+  const sizeEl=document.getElementById('f_size');
+  const hint=document.getElementById('amtHint');
+  if(!sizeEl)return;
+  if(!hint){liveCalc();return}
+  if(sizeEl.readOnly){
+    if(amt>0)hint.textContent='数量已由分批买入档位锁定';
+    liveCalc();
+    return;
+  }
+  if(amt>0&&entry>0){
+    const size=amt*L/entry;
+    sizeEl.value=String(+size.toFixed(8));
+    hint.textContent=`数量 = ${amt}U × ${L}x ÷ ${entry} = ${sizeEl.value}（保证金 ${amt}U，名义 ${+((amt*L).toFixed(2))}U）`;
+  }else{
+    hint.textContent='';
+  }
+  liveCalc();
+}
 
 /* ---------- 仪表盘 ---------- */
 function renderDashboard(){
@@ -1659,6 +1734,10 @@ function editEntry(id){
   setVal('f_entryReason',e.entryReason);setVal('f_exitReason',e.exitReason);
   setVal('f_emotion_entry',e.emotionEntry);setVal('f_emotion_hold',e.emotionHold);setVal('f_emotion_after',e.emotionAfter);
   setNum('f_leverage',e.leverage||1);
+  // 恢复投入金额（由 数量×入场价÷杠杆 反推）
+  setNum('f_amt',(e.lots&&e.lots.length)?0:(e.size*e.entry/Math.max(1,e.leverage||1)));
+  const ah=document.getElementById('amtHint');if(ah)ah.textContent='';
+  syncAmtToSize();
   const mm=e.marginMode||'isolated';initMarginMode(mm);
   setVal('f_emotionNote',e.emotionNote);setVal('f_mistakes',e.mistakes);
   setVal('f_lessons',e.lessons);setVal('f_redo',e.redo);
@@ -1869,6 +1948,182 @@ function calcPct(){
     out.innerHTML=html;
   }
 }
+
+/* ---------- 工具箱：加仓爆仓模拟器 ---------- */
+let simLots=[];
+let simMode='isolated';
+function simSetMode(m){
+  simMode=m;
+  document.querySelectorAll('#simMM .margin-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===m));
+  computeSim();
+}
+function renderSimLots(){
+  const box=document.getElementById('simLotList');
+  if(!box)return;
+  const L=Math.max(1,getNum('simLev')||1);
+  let h='';
+  simLots.forEach((t,i)=>{
+    const qty=t.price>0&&t.amt>0?t.amt*L/t.price:0;
+    h+=`<div class="target-row">
+      <div class="target-head">
+        <span class="target-idx">档位 #${i+1}${i>0?' · 补仓':''}</span>
+        <button class="target-del" onclick="delSimLot(${i})">移除</button>
+      </div>
+      <div class="row" style="gap:10px">
+        <div class="field" style="margin-bottom:0">
+          <label>买入价</label>
+          <input type="number" step="any" value="${t.price||''}" onchange="simLots[${i}].price=Number(this.value);renderSimLots()" placeholder="如 1">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>投入金额 U <span class="hint">保证金 · 数量=金额×杠杆÷价</span></label>
+          <input type="number" step="any" value="${t.amt||''}" onchange="simLots[${i}].amt=Number(this.value);renderSimLots()" placeholder="如 100">
+        </div>
+        <div class="field" style="margin-bottom:0;max-width:130px">
+          <label>数量（自动）</label>
+          <input type="text" value="${qty?+qty.toFixed(8):''}" disabled style="opacity:.75">
+        </div>
+      </div>
+    </div>`;
+  });
+  box.innerHTML=h;
+  computeSim();
+}
+function addSimLot(){simLots.push({price:0,amt:0});renderSimLots()}
+function delSimLot(i){simLots.splice(i,1);renderSimLots()}
+
+function computeSim(){
+  const out=document.getElementById('simOut');
+  if(!out)return;
+  const L=Math.max(1,getNum('simLev')||1);
+  const ac=getNum('simAccount');
+  const cur=getNum('simPrice');
+  const valid=simLots.filter(t=>t.price>0&&t.amt>0);
+  if(valid.length===0){out.innerHTML='<div class="calc-hint">添加至少一个买入档位（买入价 + 投入金额）后自动出结果</div>';return}
+  const rows=valid.map(t=>({price:t.price,amt:t.amt,qty:t.amt*L/t.price,liqIso:t.price*(1-1/L)}));
+  const totAmt=rows.reduce((s,r)=>s+r.amt,0);
+  const totQty=rows.reduce((s,r)=>s+r.qty,0);
+  const totVal=rows.reduce((s,r)=>s+r.price*r.qty,0);
+  const avg=totQty>0?totVal/totQty:0;
+  const liqCross=avg-totAmt/totQty;
+  const acRatio=ac>0?totAmt/ac*100:0;
+  const warns=[],goods=[];
+  if(ac>0&&acRatio>50)warns.push(`保证金 ${totAmt.toFixed(2)}U 已占账户 ${acRatio.toFixed(0)}%，超过一半——逐仓尚可，全仓遇到同币反向波动会锁死资金`);
+  if(simMode==='cross'&&cur>0){
+    const dist=(liqCross/cur-1)*100;
+    if(dist>-8&&dist<0)warns.push(`全仓爆仓价 ${priceFmt(liqCross)} 距当前价仅 ${Math.abs(dist).toFixed(1)}%，随时可能被插针扫爆`);
+    else if(dist>=0)warns.push(`全仓爆仓价 ${priceFmt(liqCross)} 已在当前价上方——现价在爆仓价以内，实际已是反向状态`);
+  }
+  if(L>=20)warns.push(`杠杆 ${L}x 过高：任意单档距爆仓仅 ${(100/L).toFixed(1)}%，等于把命运交给插针`);
+  else goods.push(`杠杆 ${L}x，单档爆仓缓冲 ${(100/L).toFixed(1)}%，可控`);
+
+  const qrow=s=>`<tr><td style="font-family:var(--mono)">${s}</td></tr>`;
+  const stat=(l,v,c)=>`<div class="stat"><div class="lbl">${l}</div><div class="val ${c||''}">${v}</div></div>`;
+  html='<div class="grid stat-grid" style="margin-bottom:12px">'+
+    stat('累计数量',+totQty.toFixed(4),'blue')+
+    stat('加权均价',priceFmt(avg),'')+
+    stat('总投入保证金',+totAmt.toFixed(2)+'U','')+
+    stat('名义价值',+totVal.toFixed(2)+'U','')+
+    (ac>0?stat('保证金占账户',acRatio.toFixed(0)+'%',acRatio>50?'red':'green'):'')+
+    '</div>';
+
+  html+=`<table class="swing-tbl"><tr><th>档位</th><th class="num">买入价</th><th class="num">金额U</th><th class="num">数量</th><th class="num">逐仓爆仓价</th></tr>`;
+  rows.forEach((r,i)=>{
+    const dirPct=((r.liqIso/r.price)-1)*100;
+    html+=`<tr><td>#${i+1}${i>0?' · 补仓':''}</td><td class="num" style="font-family:var(--mono)">${r.price}</td><td class="num" style="font-family:var(--mono)">${+r.amt.toFixed(2)}</td><td class="num" style="font-family:var(--mono);font-weight:600">${+r.qty.toFixed(4)}</td><td class="num" style="font-family:var(--mono);color:var(--red)">${priceFmt(r.liqIso)} <span style="color:var(--txt3)">(-${Math.abs(dirPct).toFixed(1)}%)</span></td></tr>`;
+  });
+  html+='</table>';
+
+  // 爆仓结论
+  if(simMode==='cross'){
+    html+=`<div class="callout" style="margin-top:12px">
+      <div style="font-size:12px;color:var(--txt3);margin-bottom:4px">全仓模式（统一保证金池）综合爆仓价</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--red)">${priceFmt(liqCross)}</div>
+      <div style="font-size:12px;color:var(--txt2);margin-top:4px">价格跌破此价位全部保证金亏光。<b>补仓价越高 + 数量越多 → 加权均价越被抬高 → 爆仓价越接近现价</b>，补仓前务必用这里预演。</div>
+    </div>`;
+  }else{
+    html+=`<div class="callout" style="margin-top:12px">
+      <div style="font-size:12px;color:var(--txt3);margin-bottom:4px">逐仓模式：每档独立爆仓，互不牵连</div>
+      <div style="font-size:13px;color:var(--txt2)">最危险的一档 = 距现价最近的那档。若一档爆仓，其余档继续持有，可用剩余保证金在更低位置补仓。</div>
+    </div>`;
+  }
+  if(warns.length)html+='<div class="calc-warn" style="margin-top:10px">'+warns.map(w=>'<div class="w-red">⚠ '+w+'</div>').join('')+'</div>';
+  out.innerHTML=html;
+  const hint=document.getElementById('simHint');
+  if(hint)hint.textContent=`例：${L}x，在1U买100U、2U再补100U → 每档数量 ${+rows[0].qty.toFixed(2)} / ${rows.length>1?+rows[1].qty.toFixed(2):'—'}，逐仓爆仓 ${priceFmt(rows[0].liqIso)}${rows.length>1?' / '+priceFmt(rows[1].liqIso):''}，${simMode==='cross'?'全仓爆仓 '+priceFmt(liqCross):'全仓需切换查看综合爆仓价'}`;
+}
+['simAccount','simLev','simPrice'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{renderSimLots()})});
+renderSimLots();
+
+/* ---------- 工具箱：智能仓位控制 ---------- */
+function calcSmartSize(){
+  const out=document.getElementById('szOut');
+  if(!out)return;
+  const ac=getNum('szAccount'),risk=getNum('szRisk')||2,entry=getNum('szEntry'),stop=getNum('szStop');
+  const L=Math.max(1,getNum('szLev')||1),vol=getNum('szVol');
+  if(!ac||!entry||!stop){out.innerHTML='<div class="calc-hint">请填写账户资金、入场价、止损价</div>';return}
+  if(entry===stop){out.innerHTML='<div class="calc-hint" style="color:var(--red)">入场价与止损价不能相同</div>';return}
+  const long=entry>stop;
+  let warns=[],goods=[];
+  let stopDist=Math.abs(entry-stop);
+  if(vol>0){
+    const atrDist=entry*vol/100;
+    if(stopDist<atrDist)warns.push(`止损距离 ${priceFmt(stopDist)} 不足 1 倍波动(${priceFmt(atrDist)})——止损太紧容易被震荡扫掉，建议放宽止损或减小仓位`);
+    else goods.push(`止损距离 ≥ 1 倍波动(${priceFmt(atrDist)})，抗噪合理`);
+  }
+  const riskAmt=ac*risk/100;
+  const size=riskAmt/stopDist;
+  const notional=size*entry;
+  const margin=notional/L;
+  const marginRatio=ac>0?margin/ac*100:0;
+
+  // 爆仓硬约束（逐仓近似）
+  let liq=null,stopValid=true,liqBuf=null;
+  if(L>1){
+    liq=entry*(1-(long?1:-1)/L);
+    stopValid=long?stop>liq:stop<liq;
+    liqBuf=Math.abs(liq-entry)/entry*100;
+    if(!stopValid)warns.push(`止损在爆仓价(${priceFmt(liq)})之外！会先爆仓再触发止损——止损形同虚设，请降杠杆或收紧止损`);
+  }
+  if(marginRatio>50)warns.push(`保证金占用 ${marginRatio.toFixed(0)}%，超过账户一半——建议 ≤25%，降低杠杆或减仓`);
+  else if(marginRatio>25)warns.push(`保证金占用 ${marginRatio.toFixed(0)}%，偏重——建议 ≤25%`);
+  else goods.push(`保证金占用 ${marginRatio.toFixed(0)}%，仓位适中`);
+  if(risk>2)warns.push(`单笔风险 ${risk}% 超过 2% 红线——连续3笔亏损即 -${(risk*3).toFixed(0)}%，重仓是爆仓的起源`);
+  else goods.push(`单笔风险 ${risk}% 在 2% 红线内，连亏 10 笔也仅回撤 ${(risk*10).toFixed(1)}%`);
+
+  // 健康评级
+  const ok=marginRatio<=25&&stopValid&&risk<=2;
+  const bad=marginRatio>50||!stopValid||risk>5;
+  const grade=bad?'danger':ok?'good':'warn';
+  const gradeCls=grade==='good'?'var(--green)':grade==='danger'?'var(--red)':'var(--yellow)';
+  const gradeText=grade==='good'?'✅ 仓位健康':grade==='danger'?'❌ 仓位危险，勿开':'⚠ 仓位偏重，谨慎';
+
+  const stat=(l,v,c)=>`<div class="stat"><div class="lbl">${l}</div><div class="val ${c||''}">${v}</div></div>`;
+  let html='<div class="grid stat-grid" style="color:'+gradeCls+';border:1px solid '+gradeCls+';border-radius:8px;padding:10px;text-align:center;margin-bottom:12px;grid-column:1/-1">'+gradeText+'</div>';
+  html+='<div class="grid stat-grid" style="margin-bottom:12px">'+
+    stat('应开数量',priceFmt(size),'blue')+
+    stat('风险金额',fmt(riskAmt),'red')+
+    stat('仓位价值',fmt(notional),'')+
+    stat('所需保证金',fmt(margin),'')+
+    stat('保证金占账户',marginRatio.toFixed(1)+'%',marginRatio>50?'red':'')+
+    (L>1?stat('逐仓爆仓价',priceFmt(liq),'red')+'':stat('爆仓价','现货无爆仓',''))+
+    '</div>';
+
+  // 金字塔建议
+  html+=`<div class="callout" style="margin-top:12px">
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:6px">分批建仓建议（金字塔·逐批递减）</div>
+    <table class="swing-tbl"><tr><th>批次</th><th>比例</th><th class="num">数量</th><th>说明</th></tr>
+    <tr><td>第一批</td><td>50%</td><td class="num" style="font-family:var(--mono)">${priceFmt(size*0.5)}</td><td>确认后先建半仓</td></tr>
+    <tr><td>第二批</td><td>30%</td><td class="num" style="font-family:var(--mono)">${priceFmt(size*0.3)}</td><td>趋势确认/回调加仓</td></tr>
+    <tr><td>第三批</td><td>20%</td><td class="num" style="font-family:var(--mono)">${priceFmt(size*0.2)}</td><td>突破加，绝不补亏损单</td></tr>
+    </table>
+    <div style="font-size:12px;color:var(--txt3);margin-top:6px">批次数量的总和 = 建议单笔总仓位。核心原则：<b>只在盈利方向加仓，绝不摊平亏损单</b>。</div>
+  </div>`;
+
+  if(warns.length)html+='<div class="calc-warn" style="margin-top:10px">'+warns.map(w=>'<div class="w-red">⚠ '+w+'</div>').join('')+'</div>';
+  if(goods.length)html+='<div style="margin-top:10px;font-size:12px;color:var(--txt2)">'+goods.map(g=>'✓ '+g).join('</div><div style="margin-top:4px;font-size:12px;color:var(--txt2)">')+'</div>';
+  out.innerHTML=html;
+}
+['szAccount','szRisk','szEntry','szStop','szLev','szVol'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',calcSmartSize)});
 
 /* ---------- 样例 ---------- */
 function loadSample(){
