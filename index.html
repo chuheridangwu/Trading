@@ -673,7 +673,7 @@
 
         <!-- 加仓爆仓模拟器 -->
         <div class="card" style="grid-column:1/-1">
-          <div class="section-title">加仓爆仓模拟器 <span style="color:var(--txt3);font-weight:400;text-transform:none">固定资金分批加仓 · 实时算数量/加权均价/爆仓价</span></div>
+          <div class="section-title">加仓爆仓模拟器 <span style="color:var(--txt3);font-weight:400;text-transform:none">按买入金额（币值/名义）分批加仓 · 实时算数量/保证金/加权均价/爆仓价</span></div>
           <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
             <div class="field" style="margin:0"><label>账户总资金 U <span class="hint">可选</span></label><input type="number" step="any" id="simAccount" placeholder="如 10000"></div>
             <div class="field" style="margin:0"><label>杠杆 ×</label><input type="number" step="any" id="simLev" value="10"></div>
@@ -694,7 +694,7 @@
           <div id="simLotList" style="display:flex;flex-direction:column;gap:6px;margin-top:12px"></div>
           <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
             <button class="btn sm primary" onclick="addSimLot()" style="font-size:12px">+ 添加买入档位</button>
-            <span id="simHint" class="help" style="margin:0">例：逐仓 1U 买 100U、2U 再补 100U → 看每档爆仓价；全仓则看合并爆仓价</span>
+            <span id="simHint" class="help" style="margin:0">例：0.65 买 200U（币值）、0.702 再买 200U、0.97 补 200U → 数量 307.7/284.9/206.2，保证金各 10U，看每档逐仓爆仓价与全仓合并爆仓价</span>
           </div>
           <div id="simOut" style="margin-top:12px"></div>
         </div>
@@ -1979,7 +1979,7 @@ function renderSimLots(){
   const L=Math.max(1,getNum('simLev')||1);
   let h='';
   simLots.forEach((t,i)=>{
-    const qty=t.price>0&&t.amt>0?t.amt*L/t.price:0;
+    const qty=t.price>0&&t.amt>0?t.amt/t.price:0;
     h+=`<div class="target-row">
       <div class="target-head">
         <span class="target-idx">档位 #${i+1}${i>0?' · 补仓':''}</span>
@@ -1991,12 +1991,16 @@ function renderSimLots(){
           <input type="number" step="any" value="${t.price||''}" onchange="simLots[${i}].price=Number(this.value);renderSimLots()" placeholder="如 1">
         </div>
         <div class="field" style="margin-bottom:0">
-          <label>投入金额 U <span class="hint">保证金 · 数量=金额×杠杆÷价</span></label>
-          <input type="number" step="any" value="${t.amt||''}" onchange="simLots[${i}].amt=Number(this.value);renderSimLots()" placeholder="如 100">
+          <label>买入金额 U <span class="hint">币值 · 数量=金额÷价，保证金=金额÷杠杆</span></label>
+          <input type="number" step="any" value="${t.amt||''}" onchange="simLots[${i}].amt=Number(this.value);renderSimLots()" placeholder="如 200">
         </div>
         <div class="field" style="margin-bottom:0;max-width:130px">
           <label>数量（自动）</label>
           <input type="text" value="${qty?+qty.toFixed(8):''}" disabled style="opacity:.75">
+        </div>
+        <div class="field" style="margin-bottom:0;max-width:110px">
+          <label>保证金（自动）</label>
+          <input type="text" value="${(t.price>0&&t.amt>0)?(+((t.amt/L).toFixed(4))):''}" disabled style="opacity:.75">
         </div>
       </div>
     </div>`;
@@ -2014,72 +2018,74 @@ function computeSim(){
   const ac=getNum('simAccount');
   const cur=getNum('simPrice');
   const valid=simLots.filter(t=>t.price>0&&t.amt>0);
-  if(valid.length===0){out.innerHTML='<div class="calc-hint">按币安算法：数量=金额×杠杆÷价；强平价含维持保证金率(MMR)阶梯。添加档位后自动计算</div>';return}
-  const rows=valid.map(t=>t.amt*L/t.price);
-  const totAmt=valid.reduce((s,t)=>s+t.amt,0);
+  if(valid.length===0){out.innerHTML='<div class="calc-hint">按币安算法：买入金额=币值（名义），数量=金额÷价，保证金=金额÷杠杆；强平价含维持保证金率(MMR)阶梯。添加档位后自动计算</div>';return}
+  const rows=valid.map(t=>t.amt/t.price);           // 数量 = 买入金额 ÷ 价
+  const totVal=valid.reduce((s,t)=>s+t.amt,0);      // 总名义价值 = 买入金额总和
+  const totMargin=totVal/L;                          // 总占用保证金 = 名义 ÷ 杠杆
   const totQty=rows.reduce((s,q)=>s+q,0);
-  const totVal=valid.reduce((s,t,i)=>s+t.price*rows[i],0);
   const avg=totQty>0?totVal/totQty:0;
   const mmr=mmrFor(totVal); // 整仓档位统一维持保证金率（币安按名义价值阶梯）
   const mmrTot=totVal*mmr;
-  const pool=ac>0?ac:totAmt; // 全仓担保池=钱包余额；未填余额时退化为占用保证金（更保守）
+  const pool=ac>0?ac:totMargin; // 全仓担保池=钱包余额；未填余额时退化为占用保证金（更保守）
   const long=simDir==='long';
-  // 逐仓强平价（含MMR/手续费）与破产价（亏光该档保证金的价）
+  // 逐仓强平价（含MMR/手续费）——只由杠杆与MMR决定，与仓位大小无关
   const liqIso=valid.map((t,i)=>long?t.price*(1-1/L+mmr+SIM_FEE):t.price*(1+1/L-mmr-SIM_FEE));
   // 全仓强平价：钱包余额+浮动盈亏=维持保证金总额 时触发
   const liqCross=long?avg-(pool-mmrTot)/totQty:avg+(pool-mmrTot)/totQty;
   const bankCross=long?avg-pool/totQty:avg+pool/totQty;
-  const acRatio=ac>0?totAmt/ac*100:0;
+  const noLiq=liqCross<=0||liqCross>=avg*3; // 全仓担保远大于仓位，价格范围内不会强平
+  const acRatio=ac>0?totMargin/ac*100:0;
   const warns=[],goods=[];
 
   if(ac===0)warns.push('未填「账户总资金」——全仓强平暂按占用保证金计算（更保守）。填上钱包余额才是币安全仓真实强平价');
-  if(ac>0&&acRatio>50)warns.push(`占用保证金 ${totAmt.toFixed(2)}U = 账户 ${acRatio.toFixed(0)}%，占用过高会锁死其他交易资金`);
-  if(simMode==='cross'&&cur>0){
+  if(ac>0&&acRatio>50)warns.push(`占用保证金 ${totMargin.toFixed(2)}U = 账户 ${acRatio.toFixed(0)}%，占用过高会锁死其他交易资金`);
+  if(simMode==='cross'&&cur>0&&!noLiq){
     const dist=(liqCross/cur-1)*100*(long?1:-1);
     if(dist>-8&&dist<0)warns.push(`全仓强平价 ${priceFmt(liqCross)} 距当前价仅 ${Math.abs(dist).toFixed(1)}%，随时可能被插针扫爆`);
     else if(dist>=0)warns.push(`全仓强平价 ${priceFmt(liqCross)} 已在当前价${long?'下':'上'}方——现价越过强平线，实际已处于亏损强平状态`);
   }
   if(L>=20)warns.push(`杠杆 ${L}x 过高：逐仓强平缓冲仅 ${(100/L).toFixed(1)}% 左右，插针即可打爆单档`);
   else goods.push(`杠杆 ${L}x，逐仓强平缓冲约 ${(100/L).toFixed(1)}%`);
+  if(!noLiq&&totVal>0&&ac>0&&ac/totVal>8)goods.push(`钱包余额是仓位的 ${(ac/totVal).toFixed(1)} 倍——全仓担保充足，强平非常远甚至不会发生`);
 
   const stat=(l,v,c)=>`<div class="stat"><div class="lbl">${l}</div><div class="val ${c||''}">${v}</div></div>`;
   let html='<div class="grid stat-grid" style="margin-bottom:12px">'+
     stat('累计数量',+totQty.toFixed(4),'blue')+
     stat('加权均价',priceFmt(avg),'')+
-    stat('总投入保证金',+totAmt.toFixed(2)+'U','')+
-    stat('名义价值',+totVal.toFixed(2)+'U','')+
+    stat('总买入金额',+totVal.toFixed(2)+'U','')+
+    stat('总占用保证金',+totMargin.toFixed(2)+'U','')+
     stat('维持保证金率',(mmr*100).toFixed(2)+'%','')+
-    stat('全仓强平价',priceFmt(liqCross)+(ac>0?'':'*'),ac>0?'green':'')+
+    stat('全仓强平价',noLiq?'不会强平':priceFmt(liqCross)+(ac>0?'':'*'),noLiq?'green':'')+
     '</div>';
 
-  html+=`<table class="swing-tbl"><tr><th>档位</th><th class="num">买入价</th><th class="num">金额U</th><th class="num">数量</th><th class="num">逐仓强平价</th><th class="num">该档最大损失</th></tr>`;
+  html+=`<table class="swing-tbl"><tr><th>档位</th><th class="num">买入价</th><th class="num">买入金额U</th><th class="num">保证金U</th><th class="num">数量</th><th class="num">逐仓强平价</th></tr>`;
   valid.forEach((t,i)=>{
     const dirPct=((liqIso[i]/t.price)-1)*100*(long?1:-1);
-    html+=`<tr><td>#${i+1}${i>0?' · 补仓':''}</td><td class="num" style="font-family:var(--mono)">${t.price}</td><td class="num" style="font-family:var(--mono)">${+t.amt.toFixed(2)}</td><td class="num" style="font-family:var(--mono);font-weight:600">${+rows[i].toFixed(4)}</td><td class="num" style="font-family:var(--mono);color:var(--red)">${priceFmt(liqIso[i])} <span style="color:var(--txt3)">(${dirPct<0?'-':''}${Math.abs(dirPct).toFixed(1)}%)</span></td><td class="num" style="font-family:var(--mono);color:var(--red)">-${+t.amt.toFixed(2)}U</td></tr>`;
+    html+=`<tr><td>#${i+1}${i>0?' · 补仓':''}</td><td class="num" style="font-family:var(--mono)">${t.price}</td><td class="num" style="font-family:var(--mono)">${+t.amt.toFixed(2)}</td><td class="num" style="font-family:var(--mono)">${+((t.amt/L).toFixed(4))}</td><td class="num" style="font-family:var(--mono);font-weight:600">${+rows[i].toFixed(4)}</td><td class="num" style="font-family:var(--mono);color:var(--red)">${priceFmt(liqIso[i])} <span style="color:var(--txt3)">(${dirPct<0?'-':''}${Math.abs(dirPct).toFixed(1)}%)</span></td></tr>`;
   });
   html+='</table>';
 
   // 强平结论
   const sideTxt=long?'价格跌破':'价格涨破';
-  const sidePct=long?(1-liqCross/avg)*100:(liqCross/avg-1)*100;
+  const sidePct=noLiq?0:(long?(1-liqCross/avg)*100:(liqCross/avg-1)*100);
   if(simMode==='cross'){
     html+=`<div class="callout" style="margin-top:12px">
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:4px">全仓模式 · ${long?'做多':'做空'} · 担保品=${long?'钱包全部余额':'钱包全部余额'}（${ac>0?ac+'U':'未填，按占用保证金 '+totAmt.toFixed(2)+'U'}）</div>
-      <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--red)">${priceFmt(liqCross)}</div>
-      <div style="font-size:12px;color:var(--txt2);margin-top:4px">${sideTxt} ${priceFmt(liqCross)}（约 ${Math.abs(sidePct).toFixed(1)}%）时，权益耗尽到维持保证金线触发强平（破产价 ${priceFmt(bankCross)} 为亏光）。${cur>0?'距当前价 '+Math.abs(((liqCross/cur)-1)*100*(long?1:-1)).toFixed(1)+'%':''}<b>补仓价越高 + 数量越多 → 加权均价被抬高 → 强平价靠近现价</b>。未计资金费率/实际强平手续费，且账户有其他持仓或挂单时需另行计算。</div>
+      <div style="font-size:12px;color:var(--txt3);margin-bottom:4px">全仓模式 · ${long?'做多':'做空'} · 担保品=钱包全部余额（${ac>0?ac+'U':'未填，按占用保证金 '+totMargin.toFixed(2)+'U'}）</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--${noLiq?'green':'red'})">${noLiq?'此仓位不会强平':priceFmt(liqCross)}</div>
+      <div style="font-size:12px;color:var(--txt2);margin-top:4px">${noLiq?`钱包余额 ${ac||'未填'}U 远大于仓位（总买入 ${totVal.toFixed(2)}U），即使价格${long?'归零':'翻倍'}也到不了维持保证金线。`:`${sideTxt} ${priceFmt(liqCross)}（约 ${Math.abs(sidePct).toFixed(1)}%）时，权益耗尽到维持保证金线触发强平（破产价 ${priceFmt(bankCross)} 为亏光）。${cur>0?'距当前价 '+Math.abs(((liqCross/cur)-1)*100*(long?1:-1)).toFixed(1)+'%':''}`}<b>补仓价越高 + 数量越多 → 加权均价被抬高 → 强平价靠近现价</b>。未计资金费率/实际强平手续费，且账户有其他持仓或挂单时需另行计算。</div>
     </div>`;
   }else{
     html+=`<div class="callout" style="margin-top:12px">
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:6px">逐仓模式：每档独立强平、最多只亏该档保证金（图示 -${+valid[0].amt.toFixed(0)}U 等），互不牵连</div>
-      <table class="swing-tbl"><tr><th>档位</th><th class="num">买入价</th><th class="num">强平价</th><th class="num">该档最大损失</th></tr>`+valid.map((t,i)=>`<tr><td>#${i+1}</td><td class="num" style="font-family:var(--mono)">${t.price}</td><td class="num" style="font-family:var(--mono);color:var(--red);font-weight:600">${priceFmt(liqIso[i])}</td><td class="num" style="font-family:var(--mono)">-${+t.amt.toFixed(2)}U</td></tr>`).join('')+`</table>
-      <div style="font-size:12px;color:var(--txt2);margin-top:6px">参考：若改全仓，强平价 = ${priceFmt(liqCross)}（以${ac>0?'钱包余额 '+ac+'U':'占用保证金'}为担保），通常比逐仓远得多。</div>
+      <div style="font-size:12px;color:var(--txt3);margin-bottom:6px">逐仓模式：每档独立强平、最多只亏该档保证金（如上表各档保证金U），互不牵连</div>
+      <table class="swing-tbl"><tr><th>档位</th><th class="num">买入价</th><th class="num">强平价</th><th class="num">该档最大损失</th></tr>`+valid.map((t,i)=>`<tr><td>#${i+1}</td><td class="num" style="font-family:var(--mono)">${t.price}</td><td class="num" style="font-family:var(--mono);color:var(--red);font-weight:600">${priceFmt(liqIso[i])}</td><td class="num" style="font-family:var(--mono)">-${+((t.amt/L).toFixed(2))}U</td></tr>`).join('')+`</table>
+      <div style="font-size:12px;color:var(--txt2);margin-top:6px">参考：若改全仓，强平价 = ${noLiq?'不会强平（担保充足）':priceFmt(liqCross)}（以${ac>0?'钱包余额 '+ac+'U':'占用保证金'}为担保）。</div>
     </div>`;
   }
   if(warns.length)html+='<div class="calc-warn" style="margin-top:10px">'+warns.map(w=>'<div class="w-red">⚠ '+w+'</div>').join('')+'</div>';
-  html+='<div style="margin-top:8px;font-size:11px;color:var(--txt3)">算法：数量=金额×杠杆÷价；逐仓强平价≈入场价×(1∓1/杠杆±维持保证金率±手续费)；全仓按 钱包余额+浮动盈亏=维持保证金总额 反推。币安以标记价格实时估算，本表为预估值，以持仓页为准。</div>';
+  html+='<div style="margin-top:8px;font-size:11px;color:var(--txt3)">算法：买入金额=币值（名义），数量=金额÷价，保证金=金额÷杠杆；逐仓强平价≈入场价×(1∓1/杠杆±维持保证金率±手续费)，与仓位大小无关、只由杠杆决定；全仓按 钱包余额+浮动盈亏=维持保证金总额 反推。币安以标记价格实时估算，本表为预估值，以持仓页为准。</div>';
   out.innerHTML=html;
   const hint=document.getElementById('simHint');
-  if(hint)hint.textContent=`例：${L}x，1U买100U、2U再补100U → 逐仓强平 ${priceFmt(liqIso[0])}${liqIso.length>1?' / '+priceFmt(liqIso[1]):''}，全仓强平 ${priceFmt(liqCross)}`;
+  if(hint)hint.textContent=`例：${L}x，1U买100U、2U再补100U → 数量 ${+rows[0].toFixed(2)}${rows.length>1?' / '+rows[1].toFixed(2):''}，逐仓强平 ${priceFmt(liqIso[0])}${liqIso.length>1?' / '+priceFmt(liqIso[1]):''}，全仓 ${noLiq?'不会强平':'强平 '+priceFmt(liqCross)}`;
 }
 ['simAccount','simLev','simPrice'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{renderSimLots()})});
 renderSimLots();
