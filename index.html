@@ -702,6 +702,13 @@
         <!-- 智能仓位控制 -->
         <div class="card" style="grid-column:1/-1">
           <div class="section-title">智能仓位控制 (Risk-based Sizer) <span style="color:var(--txt3);font-weight:400;text-transform:none">单笔风险 % × 账户 → 反推仓位 · 波动率与爆仓校验</span></div>
+          <div class="callout" style="margin:0 0 12px">
+            <div style="font-size:12px;color:var(--txt2);line-height:1.8">
+              核心思路：<b>先决定这单最多亏多少钱（账户 × 风险%），工具反推"该买多少币"</b>——止损触发时只亏那么多。<br>
+              填 4 项即可：账户资金 · 单笔风险%（建议≤2）· 入场价 · 止损价。算出的<b>应开数量</b>保证：价格走到止损时亏 ≈ 风险金额。<br>
+              例如 14188U 账户、风险2%、做空入场 0.718、止损 0.80 → 最多亏 283U，应买 ≈ 3450 币。杠杆只影响保证金与爆仓价，不影响风险金额。
+            </div>
+          </div>
           <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr;gap:12px">
             <div class="field" style="margin:0"><label>账户资金 U <span class="req">*</span></label><input type="number" step="any" id="szAccount" placeholder="如 10000"></div>
             <div class="field" style="margin:0"><label>单笔风险 % <span class="hint">建议≤2</span></label><input type="number" step="any" id="szRisk" value="2"></div>
@@ -2175,6 +2182,7 @@ function calcSmartSize(){
 
   if(warns.length)html+='<div class="calc-warn" style="margin-top:10px">'+warns.map(w=>'<div class="w-red">⚠ '+w+'</div>').join('')+'</div>';
   if(goods.length)html+='<div style="margin-top:10px;font-size:12px;color:var(--txt2)">'+goods.map(g=>'✓ '+g).join('</div><div style="margin-top:4px;font-size:12px;color:var(--txt2)">')+'</div>';
+  html+=`<div style="margin-top:8px;font-size:11px;color:var(--txt3)">怎么看：<b style="color:var(--txt2)">应开数量</b>是买入币数；<b style="color:var(--txt2)">风险金额</b>=这单最多亏的钱（账户×风险%）；<b style="color:var(--txt2)">仓位价值</b>=数量×入场价；<b style="color:var(--txt2)">所需保证金</b>=仓位价值÷杠杆；<b style="color:var(--txt2)">爆仓价</b>是强制平仓线，止损必须比它先触发才有效。所有数字随输入实时变化。</div>`;
   out.innerHTML=html;
 }
 ['szAccount','szRisk','szEntry','szStop','szLev','szVol'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',calcSmartSize)});
