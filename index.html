@@ -1996,14 +1996,15 @@ function renderSimLots(){
           <input type="number" step="any" value="${t.price||''}" onchange="simLots[${i}].price=Number(this.value);renderSimLots()" placeholder="如 1">
         </div>
         <div class="field" style="margin-bottom:0">
-          <label>买入金额 U <span class="hint">币值 · 数量=金额÷价，保证金=金额÷杠杆</span></label>
+          <label>买入金额 U <span class="hint">币值</span></label>
           <input type="number" step="any" value="${t.amt||''}" onchange="simLots[${i}].amt=Number(this.value);renderSimLots()" placeholder="如 200">
+          <div class="help">数量=金额÷价 · 保证金=金额÷杠杆</div>
         </div>
-        <div class="field" style="margin-bottom:0;max-width:130px">
+        <div class="field" style="margin-bottom:0">
           <label>数量（自动）</label>
           <input type="text" value="${qty?+qty.toFixed(8):''}" disabled style="opacity:.75">
         </div>
-        <div class="field" style="margin-bottom:0;max-width:110px">
+        <div class="field" style="margin-bottom:0">
           <label>保证金（自动）</label>
           <input type="text" value="${(t.price>0&&t.amt>0)?(+((t.amt/L).toFixed(4))):''}" disabled style="opacity:.75">
         </div>
