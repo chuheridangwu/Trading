@@ -438,7 +438,7 @@
             <div class="field" id="exitField"><label>出场价 Exit <span class="req">*</span></label><input type="number" step="any" id="f_exit" required></div>
             <div class="field"><label>止损价 Stop <span class="req">*</span></label><input type="number" step="any" id="f_stop" required></div>
             <div class="field"><label>仓位数量 Size <span class="req">*</span> <span class="hint">币数 / 股数 / 合约数</span></label><input type="number" step="any" id="f_size" required>
-              <label style="margin-top:10px">投入金额 U <span class="hint">可选 · 自动算数量</span></label>
+              <label style="margin-top:10px">买入金额 U <span class="hint">币值 · 可选 · 自动算数量</span></label>
               <input type="number" step="any" id="f_amt" placeholder="如 1000" oninput="syncAmtToSize()">
               <div class="help" id="amtHint"></div>
             </div>
@@ -709,6 +709,12 @@
             <div class="field" style="margin:0"><label>止损价 <span class="req">*</span></label><input type="number" step="any" id="szStop" placeholder="如 195000"></div>
             <div class="field" style="margin:0"><label>杠杆 ×</label><input type="number" step="any" id="szLev" value="1"></div>
             <div class="field" style="margin:0"><label>波动率 % <span class="hint">可选 · 如1H/4H 平均波幅</span></label><input type="number" step="any" id="szVol" placeholder="如 3"></div>
+            <div class="field" style="margin:0"><label>保证金模式</label>
+              <div class="margin-mode-group" id="szModeG">
+                <button class="margin-mode-btn" data-mode="isolated" onclick="szSetMode('isolated')" type="button">逐仓</button>
+                <button class="margin-mode-btn active" data-mode="cross" onclick="szSetMode('cross')" type="button">全仓</button>
+              </div>
+            </div>
           </div>
           <div style="margin-top:12px"><button class="btn primary" onclick="calcSmartSize()">计算应开仓位</button></div>
           <div id="szOut" style="margin-top:12px"></div>
@@ -944,20 +950,20 @@ function liveCalc(){
   const rMult=hasSize&&hasExit&&riskAmt>0?pnl/riskAmt:0;
   const planRR=tg>0&&hasStop?(Math.abs(tg-e)/Math.abs(e-st)):0;
   const marginMode=getMarginMode();
-  let liq;
+  const mmr=notional>0?mmrFor(notional):0; // 维持保证金率（按名义价值阶梯）
+  let liq=0,noLiq=false;
   if(marginMode==='cross'&&ac>0){
     if(dirSign>0){
-      const denom=e*s;
-      liq=denom>0?e-ac/s:0;
-      if(liq<0)liq=0.000001;
+      liq=s>0?e-(ac-mmr*notional)/s:0;
+      if(liq<=0){noLiq=true;liq=0;}   // 全仓担保远大于仓位 → 不会强平
     }else{
-      liq=e+ac/s;
+      liq=s>0?e+(ac-mmr*notional)/s:0;
     }
   }else{
-    liq=dirSign>0?e*(1-1/L):e*(1+1/L);
+    liq=dirSign>0?e*(1-1/L+mmr+SIM_FEE):e*(1+1/L-mmr-SIM_FEE);
   }
   const liqDist=hasSize?Math.abs(liq-e)/e*100:0;   // 距爆仓%(价格反向走多少爆仓)
-  const stopEffective=dirSign>0?(st>liq):(st<liq);  // 止损是否在爆仓价之内(有效)
+  const stopEffective=hasSize&&!noLiq&&(dirSign>0?(st>liq):(st<liq));  // 止损是否在爆仓价之内(有效)
   const pc=c=>c>=0?'var(--green)':'var(--red)';
   const posCol=posRatio<=100?'var(--green)':posRatio<=300?'var(--yellow)':'var(--red)';
   const marCol=marginRatio<=50?'var(--green)':marginRatio<=80?'var(--yellow)':'var(--red)';
@@ -968,7 +974,7 @@ function liveCalc(){
   if(hasStop&&!stopEffective)warns.push(['w-red','✗ 止损在爆仓价之外，会先被强平触发，止损无效！请把止损收紧到爆仓价之内']);
   if(hasSize&&hasStop&&stopEffective&&lossPct>5)warns.push(['w-yel','⚠ 到止损会亏账户 '+lossPct.toFixed(1)+'%，超过5%，仓位偏重']);
   if(L>20)warns.push(['w-yel','⚠ '+L+'x 杠杆过高，价格反向仅 '+(100/L).toFixed(1)+'% 即爆仓']);
-  if(hasSize&&liqDist<5)warns.push(['w-red','⚠ 距爆仓仅 '+liqDist.toFixed(1)+'%，随时可能强平']);
+  if(hasSize&&!noLiq&&liqDist<5)warns.push(['w-red','⚠ 距爆仓仅 '+liqDist.toFixed(1)+'%，随时可能强平']);
   box.className='callout';
   box.innerHTML=
     '<div style="font-size:11px;color:var(--txt3);margin-bottom:2px">实时测算</div>'+
@@ -978,8 +984,8 @@ function liveCalc(){
       (planRR?cc('计划盈亏比','1:'+planRR.toFixed(1),'var(--txt)'):'')+
       cc('仓位价值占比',hasSize?posRatio.toFixed(0)+'%':'—',hasSize?posCol:'var(--txt3)')+
       cc('保证金占总资金',hasSize?marginRatio.toFixed(0)+'%':'—',hasSize?marCol:'var(--txt3)',true)+
-      cc('爆仓价',hasSize?liq.toFixed(4):'—','var(--red)')+
-      cc('距爆仓',hasSize?liqDist.toFixed(1)+'%':'—',hasSize?liqDistCol:'var(--txt3)')+
+      cc('爆仓价',hasSize?noLiq?'不会强平':liq.toFixed(4):'—',noLiq?'var(--green)':'var(--red)')+
+      cc('距爆仓',hasSize?noLiq?'—':liqDist.toFixed(1)+'%':'—',hasSize&&!noLiq?liqDistCol:'var(--txt3)')+
       cc('到止损亏损',hasSize&&hasStop?'-'+lossPct.toFixed(1)+'%':'—',hasSize&&hasStop?lossCol:'var(--txt3)')+
     '</div>'+
     (warns.length?'<div class="calc-warn">'+warns.map(w=>'<div class="'+w[0]+'">'+w[1]+'</div>').join('')+'</div>':'');
@@ -1042,24 +1048,23 @@ function evaluate(d){
   // 杠杆（币圈合约专属）
   const L=Math.max(1,d.leverage||1);
   const marginMode=d.marginMode||'isolated';
-  let liq;
-  if(marginMode==='cross'&&(d.account||0)>0){
-    const ac=d.account||0;
-    const s=d.size||0;
+  const ac=d.account||0,s=d.size||0;
+  const mmr=(s*d.entry)>0?mmrFor(s*d.entry):0;
+  let liq=0,noLiq=false;
+  if(marginMode==='cross'&&ac>0){
     if(d.direction==='long'){
-      const denom=d.entry*s;
-      liq=denom>0?d.entry-ac/s:0;
-      if(liq<0)liq=0.000001;
+      liq=s>0?d.entry-(ac-mmr*s*d.entry)/s:0;
+      if(liq<=0){noLiq=true;liq=0;}
     }else{
-      liq=d.entry+ac/s;
+      liq=s>0?d.entry+(ac-mmr*s*d.entry)/s:0;
     }
   }else{
-    liq=d.direction==='long'?d.entry*(1-1/L):d.entry*(1+1/L);
+    liq=d.direction==='long'?d.entry*(1-1/L+mmr+SIM_FEE):d.entry*(1+1/L-mmr-SIM_FEE);
   }
-  const stopBeyondLiq=(d.direction==='long')?d.stop<liq:d.stop>liq;
+  const stopBeyondLiq=!noLiq&&((d.direction==='long')?d.stop<liq:d.stop>liq);
   if(stopBeyondLiq){issues.push(`${L}x 杠杆下估算爆仓价 ${liq.toFixed(4)} 在止损价 ${d.stop} 之外——会先被强平才到止损，等于没止损。币圈高杠杆=把命运交给爆仓价。`)}
-  else if(L>=20){issues.push(`${L}x 杠杆过高，爆仓距离极近（距入场 ${(L>=1?(100/L):0).toFixed(1)}%），币圈高杠杆=赌方向。建议降到 10x 以内。`)}
-  else if(L>10){warns.push(`${L}x 杠杆偏高，爆仓距离近，务必保证止损在爆仓价之内。`)}
+  else if(!noLiq&&L>=20){issues.push(`${L}x 杠杆过高，爆仓距离极近（距入场 ${(L>=1?(100/L):0).toFixed(1)}%），币圈高杠杆=赌方向。建议降到 10x 以内。`)}
+  else if(!noLiq&&L>10){warns.push(`${L}x 杠杆偏高，爆仓距离近，务必保证止损在爆仓价之内。`)}
   else if(L>1){goods.push(`${L}x 杠杆适中，爆仓距离可控。`)}
 
   // 自评
@@ -1232,7 +1237,7 @@ function renderLots(){
   const L=Math.max(1,getNum('f_leverage')||1);
   let h='';
   lotsData.forEach((t,i)=>{
-    const amt=t.amt>0?t.amt:(t.price>0&&t.size>0?t.price*t.size/L:0);
+    const amt=t.amt>0?t.amt:(t.price>0&&t.size>0?t.price*t.size:0);
     h+=`<div class="target-row">
       <div class="target-head">
         <span class="target-idx">买入 #${i+1}${i>0?' · 补仓':''}</span>
@@ -1241,15 +1246,15 @@ function renderLots(){
       <div class="row" style="gap:10px">
         <div class="field" style="margin-bottom:0">
           <label>买入价</label>
-          <input type="number" step="any" value="${t.price||''}" onchange="lotsData[${i}].price=Number(this.value);if(lotsData[${i}].amt>0&&this.value>0){lotsData[${i}].size=lotsData[${i}].amt*Math.max(1,getNum('f_leverage')||1)/this.value}renderLots()" placeholder="65000">
+          <input type="number" step="any" value="${t.price||''}" onchange="lotsData[${i}].price=Number(this.value);if(lotsData[${i}].amt>0&&this.value>0){lotsData[${i}].size=lotsData[${i}].amt/this.value}renderLots()" placeholder="65000">
         </div>
         <div class="field" style="margin-bottom:0">
           <label>数量 <span class="hint">币数</span></label>
           <input type="number" step="any" value="${t.size||''}" onchange="lotsData[${i}].size=Number(this.value);delete lotsData[${i}].amt;renderLots()" placeholder="0.5">
         </div>
         <div class="field" style="margin-bottom:0">
-          <label>投入金额 U <span class="hint">可选</span></label>
-          <input type="number" step="any" value="${amt||''}" onchange="lotsData[${i}].amt=Number(this.value);if(lotsData[${i}].price>0&&this.value>0)lotsData[${i}].size=lotsData[${i}].amt*Math.max(1,getNum('f_leverage')||1)/lotsData[${i}].price;renderLots()" placeholder="如 1000">
+          <label>买入金额 U <span class="hint">币值 · 可选</span></label>
+          <input type="number" step="any" value="${amt||''}" onchange="lotsData[${i}].amt=Number(this.value);if(lotsData[${i}].price>0&&this.value>0)lotsData[${i}].size=lotsData[${i}].amt/lotsData[${i}].price;renderLots()" placeholder="如 1000">
         </div>
       </div>
     </div>`;
@@ -1274,13 +1279,13 @@ function syncLotsToEntry(){
   }
   const totSize=complete.reduce((s,t)=>s+t.size,0);
   const totVal=complete.reduce((s,t)=>s+t.price*t.size,0);
-  const totAmt=complete.reduce((s,t)=>s+(t.amt>0?t.amt:t.price*t.size/L),0);
+  const totAmt=complete.reduce((s,t)=>s+(t.amt>0?t.amt:t.price*t.size),0);
   const avg=totVal/totSize;
   entryEl.value=String(+avg.toFixed(8));
   sizeEl.value=String(+totSize.toFixed(8));
   const locked=incomplete.length===0;
   entryEl.readOnly=locked;sizeEl.readOnly=locked;
-  sum.textContent=`加权均价 ${entryEl.value} × 总数量 ${sizeEl.value}（${complete.length} 档 · 总投入约 ${+totAmt.toFixed(2)}U）已自动填入入场价与仓位数量`+
+  sum.textContent=`加权均价 ${entryEl.value} × 总数量 ${sizeEl.value}（${complete.length} 档 · 总买入币值约 ${+totAmt.toFixed(2)}U）已自动填入入场价与仓位数量`+
     (incomplete.length?` · ⚠ ${incomplete.length} 档未填完整，暂未计入`:'')+
     (locked?' · 若改手填请先清空买入档位':'');
   liveCalc();
@@ -1303,9 +1308,9 @@ function syncAmtToSize(){
     return;
   }
   if(amt>0&&entry>0){
-    const size=amt*L/entry;
+    const size=amt/entry;
     sizeEl.value=String(+size.toFixed(8));
-    hint.textContent=`数量 = ${amt}U × ${L}x ÷ ${entry} = ${sizeEl.value}（保证金 ${amt}U，名义 ${+((amt*L).toFixed(2))}U）`;
+    hint.textContent=`数量 = ${amt}U ÷ ${entry} = ${sizeEl.value}（买入币值 ${amt}U，保证金 ${+(amt/L).toFixed(2)}U）`;
   }else{
     hint.textContent='';
   }
@@ -1740,8 +1745,8 @@ function editEntry(id){
   setVal('f_entryReason',e.entryReason);setVal('f_exitReason',e.exitReason);
   setVal('f_emotion_entry',e.emotionEntry);setVal('f_emotion_hold',e.emotionHold);setVal('f_emotion_after',e.emotionAfter);
   setNum('f_leverage',e.leverage||1);
-  // 恢复投入金额（由 数量×入场价÷杠杆 反推）
-  setNum('f_amt',(e.lots&&e.lots.length)?0:(e.size*e.entry/Math.max(1,e.leverage||1)));
+  // 恢复买入金额（名义币值 = 数量×入场价）
+  setNum('f_amt',(e.lots&&e.lots.length)?0:(e.size*e.entry));
   const ah=document.getElementById('amtHint');if(ah)ah.textContent='';
   syncAmtToSize();
   const mm=e.marginMode||'isolated';initMarginMode(mm);
@@ -2091,6 +2096,12 @@ function computeSim(){
 renderSimLots();
 
 /* ---------- 工具箱：智能仓位控制 ---------- */
+let szMode='cross';
+function szSetMode(mode){
+  szMode=mode;
+  document.querySelectorAll('#szModeG .margin-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+  calcSmartSize();
+}
 function calcSmartSize(){
   const out=document.getElementById('szOut');
   if(!out)return;
@@ -2112,11 +2123,17 @@ function calcSmartSize(){
   const margin=notional/L;
   const marginRatio=ac>0?margin/ac*100:0;
 
-  // 爆仓硬约束（逐仓近似）
-  let liq=null,stopValid=true,liqBuf=null;
+  // 爆仓价（币安算法：逐仓含MMR+手续费；全仓以钱包余额为担保）
+  let liqIso=null,liqCross=null,liq=null,stopValid=true,liqBuf=null,noLiq=false;
+  const mmr=notional>0?mmrFor(notional):0;
   if(L>1){
-    liq=entry*(1-(long?1:-1)/L);
-    stopValid=long?stop>liq:stop<liq;
+    liqIso=long?entry*(1-1/L+mmr+SIM_FEE):entry*(1+1/L-mmr-SIM_FEE);
+    if(szMode==='cross'&&ac>0){
+      liqCross=long?entry-(ac-mmr*notional)/size:entry+(ac-mmr*notional)/size;
+      if(liqCross<=0){noLiq=true;liqCross=0;}
+    }
+    liq=szMode==='cross'&&ac>0?liqCross:liqIso;
+    stopValid=noLiq||(long?stop>liq:stop<liq);
     liqBuf=Math.abs(liq-entry)/entry*100;
     if(!stopValid)warns.push(`止损在爆仓价(${priceFmt(liq)})之外！会先爆仓再触发止损——止损形同虚设，请降杠杆或收紧止损`);
   }
@@ -2141,7 +2158,7 @@ function calcSmartSize(){
     stat('仓位价值',fmt(notional),'')+
     stat('所需保证金',fmt(margin),'')+
     stat('保证金占账户',marginRatio.toFixed(1)+'%',marginRatio>50?'red':'')+
-    (L>1?stat('逐仓爆仓价',priceFmt(liq),'red')+'':stat('爆仓价','现货无爆仓',''))+
+    (L>1?stat(szMode==='cross'?'全仓爆仓价':'逐仓爆仓价',noLiq?'不会强平':priceFmt(liq),noLiq?'green':'red')+'':stat('爆仓价','现货无爆仓',''))+
     '</div>';
 
   // 金字塔建议
