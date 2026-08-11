@@ -2033,7 +2033,7 @@ function computeSim(){
   // 全仓强平价：钱包余额+浮动盈亏=维持保证金总额 时触发
   const liqCross=long?avg-(pool-mmrTot)/totQty:avg+(pool-mmrTot)/totQty;
   const bankCross=long?avg-pool/totQty:avg+pool/totQty;
-  const noLiq=liqCross<=0||liqCross>=avg*3; // 全仓担保远大于仓位，价格范围内不会强平
+  const noLiq=liqCross<=0; // 仅做多：担保远大于仓位时强平价为负 → 不会强平（币安显示 -）。空单强平价恒在均价上方，永远有真实数值
   const acRatio=ac>0?totMargin/ac*100:0;
   const warns=[],goods=[];
 
