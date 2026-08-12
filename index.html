@@ -2212,6 +2212,20 @@ function calcSmartSize(){
   if(risk>2)warns.push(`单笔风险 ${risk}% 超过 2% 红线——连续3笔亏损即 -${(risk*3).toFixed(0)}%，重仓是爆仓的起源`);
   else goods.push(`单笔风险 ${risk}% 在 2% 红线内，连亏 10 笔也仅回撤 ${(risk*10).toFixed(1)}%`);
 
+  // 当前价：距入场/距爆仓%、方向合理性
+  let curStat=[];
+  if(cur>0){
+    const dEntry=(cur/avgEntry-1)*100*(long?1:-1);       // 距入场%（正=有利方向）
+    const dStop=(cur/stop-1)*100*(long?1:-1);            // 距止损%
+    const dLiq=(liq>0&&!noLiq)?(cur/liq-1)*100*(long?1:-1):null; // 距爆仓%
+    curStat=[stat('当前价',priceFmt(cur),''),
+      stat('距入场',(dEntry>=0?'+':'')+dEntry.toFixed(1)+'%',dEntry>=0?'green':'red')];
+    if(dLiq!=null)curStat.push(stat('距爆仓',(dLiq>=0?'+':'')+dLiq.toFixed(1)+'%',noLiq?'green':(dLiq<0?'red':'')));
+    if((long&&cur>stop&&cur<entry)||(!long&&cur<stop&&cur>entry))goods.push(`现价 ${priceFmt(cur)} 在入场与止损之间——还没被扫止损，但已浮亏，注意别提前扛单`);
+    if((long&&cur>=entry)||(!long&&cur<=entry))warns.push(`${long?'追高':'追空'}：现价 ${priceFmt(cur)} 已在入场价${long?'上':'下'}方 ${Math.abs(dEntry).toFixed(1)}%——此时开单是在追${long?'涨':'跌'}，风险回报已变差，建议等回调`);
+    if((long&&cur<=stop)||(!long&&cur>=stop))warns.push(`现价 ${priceFmt(cur)} 已越过止损线——这笔计划在现价已处于止损/亏损状态，不应执行`);
+  }
+
   // 健康评级
   const ok=marginRatio<=25&&stopValid&&risk<=2;
   const bad=marginRatio>50||!stopValid||risk>5;
@@ -2229,6 +2243,7 @@ function calcSmartSize(){
     stat('保证金占账户',marginRatio.toFixed(1)+'%',marginRatio>50?'red':'')+
     stat('加权均价',priceFmt(avgEntry),'')+
     (L>1?stat(szMode==='cross'?'全仓爆仓价':'逐仓爆仓价',noLiq?'不会强平':priceFmt(liq),noLiq?'green':'red')+'':stat('爆仓价','现货无爆仓',''))+
+    curStat.join('')+
     '</div>';
 
   // 补仓档位表（如填了）
@@ -2255,7 +2270,7 @@ function calcSmartSize(){
 
   if(warns.length)html+='<div class="calc-warn" style="margin-top:10px">'+warns.map(w=>'<div class="w-red">⚠ '+w+'</div>').join('')+'</div>';
   if(goods.length)html+='<div style="margin-top:10px;font-size:12px;color:var(--txt2)">'+goods.map(g=>'✓ '+g).join('</div><div style="margin-top:4px;font-size:12px;color:var(--txt2)">')+'</div>';
-  html+=`<div style="margin-top:8px;font-size:11px;color:var(--txt3)">怎么看：<b style="color:var(--txt2)">应开数量</b>是买入币数；<b style="color:var(--txt2)">风险金额</b>=这单最多亏的钱（账户×风险%）；<b style="color:var(--txt2)">仓位价值</b>=数量×入场价；<b style="color:var(--txt2)">所需保证金</b>=仓位价值÷杠杆；<b style="color:var(--txt2)">爆仓价</b>是强制平仓线，止损必须比它先触发才有效。所有数字随输入实时变化。</div>`;
+  html+=`<div style="margin-top:8px;font-size:11px;color:var(--txt3)">怎么看：<b style="color:var(--txt2)">应开数量</b>是买入币数；<b style="color:var(--txt2)">风险金额</b>=这单最多亏的钱（账户×风险%）；<b style="color:var(--txt2)">仓位价值</b>=数量×入场价；<b style="color:var(--txt2)">所需保证金</b>=仓位价值÷杠杆；<b style="color:var(--txt2)">爆仓价</b>是强制平仓线，止损必须比它先触发才有效；<b style="color:var(--txt2)">当前价</b>可选，填了才算距入场/距爆仓%，并检查是否在追高/追空或已越过止损。所有数字随输入实时变化。</div>`;
   out.innerHTML=html;
 }
 ['szAccount','szRisk','szEntry','szStop','szLev','szVol','szPrice'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',calcSmartSize)});
