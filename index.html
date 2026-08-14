@@ -429,6 +429,14 @@
           <div class="tagbox" id="f_tags"><input type="text" id="tagInput" placeholder="输入后回车"></div>
         </div>
 
+        <div class="field" style="margin-bottom:0"><label>交易状态</label>
+          <label class="toggle" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="f_status" checked onchange="toggleStatus()">
+            <span class="toggle-slider"></span>
+            <span id="statusLabel">已平仓</span>
+          </label>
+        </div>
+
         <div class="section-title" style="margin-top:20px">② 交易参数 <span class="hint" style="text-transform:none;font-weight:400">—— 用于自动计算盈亏、R倍数、风险%</span></div>
 
         <div class="param-group">
@@ -478,14 +486,6 @@
         </div>
 
         <div class="callout" id="liveCalc">填写交易参数后将自动计算 盈亏 / R倍数 / 风险占比 / 计划盈亏比</div>
-
-        <div class="field"><label>交易状态</label>
-          <label class="toggle" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="f_status" checked onchange="toggleStatus()">
-            <span class="toggle-slider"></span>
-            <span id="statusLabel">已平仓</span>
-          </label>
-        </div>
 
         <div class="section-title" style="margin-top:20px">③ 市场环境与计划</div>
         <div class="row">
