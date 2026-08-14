@@ -1194,8 +1194,7 @@ function toggleStatus(){
   document.getElementById('statusLabel').textContent=checked?'已平仓':'持仓中';
   document.getElementById('exitField').style.display=checked?'':'none';
   document.getElementById('exitReasonField').style.display=checked?'':'none';
-  if(!checked){document.getElementById('f_exit').removeAttribute('required');document.getElementById('f_exit').value=''}
-  else document.getElementById('f_exit').setAttribute('required','');
+  document.getElementById('f_exit')[checked?'setAttribute':'removeAttribute']('required','')
   liveCalc();
 }
 
