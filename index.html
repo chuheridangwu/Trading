@@ -630,7 +630,7 @@
           <div class="section-title">加仓爆仓模拟器 <span style="color:var(--txt3);font-weight:400;text-transform:none">按买入金额（币值/名义）分批加仓 · 实时算数量/保证金/加权均价/爆仓价</span></div>
           <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
             <div class="field" style="margin:0"><label>账户总资金 U <span class="hint">可选</span></label><input type="number" step="any" id="simAccount" placeholder="如 10000"></div>
-            <div class="field" style="margin:0"><label>杠杆 ×</label><input type="number" step="any" id="simLev" value="10"></div>
+            <div class="field" style="margin:0"><label>杠杆 ×</label><input type="number" step="any" id="simLev" value="3"></div>
             <div class="field" style="margin:0"><label>当前价 <span class="hint">可选 · 算实时盈亏/距强平%</span></label><input type="number" step="any" id="simPrice" placeholder="如 1.2"></div>
             <div class="field" style="margin:0"><label>方向 / 保证金模式</label>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -1963,7 +1963,7 @@ function computeSim(){
     stat('总占用保证金',+totMargin.toFixed(2)+'U','')+
     stat('维持保证金率',(mmr*100).toFixed(2)+'%','')+
     stat('全仓强平价',noLiq?'不会强平':priceFmt(liqCross)+(ac>0?'':'*'),noLiq?'green':'')+
-    (pnl!=null?stat('当前盈亏',(pnl>=0?'+':'')+fmt(pnl)+'U',pnl>=0?'green':'red')+'':'')+
+    (pnl!=null?stat('当前盈亏',fmt(pnl)+'U',pnl>=0?'green':'red')+'':'')+
     (pnlPct!=null?stat('盈亏率',(pnlPct>=0?'+':'')+pnlPct.toFixed(2)+'%',pnlPct>=0?'green':'red')+'':'')+
     '</div>';
 
