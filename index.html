@@ -626,28 +626,6 @@
       </div>
       <div class="grid" style="grid-template-columns:1fr 1fr">
 
-        <!-- 斐波那契回撤 -->
-        <div class="card">
-          <div class="section-title">斐波那契回撤 (Fibonacci Retracement)</div>
-          <div class="row">
-            <div class="field" style="margin:0"><label>高点 High</label><input type="number" step="any" id="fibHigh" placeholder="如 70000"></div>
-            <div class="field" style="margin:0"><label>低点 Low</label><input type="number" step="any" id="fibLow" placeholder="如 60000"></div>
-          </div>
-          <div style="margin-top:14px"><button class="btn primary" onclick="calcFib()">计算</button></div>
-          <div id="fibOut" style="margin-top:14px"></div>
-        </div>
-
-        <!-- 百分比计算 -->
-        <div class="card">
-          <div class="section-title">百分比计算器</div>
-          <div class="row">
-            <div class="field" style="margin:0"><label>基础价格</label><input type="number" step="any" id="pctBase" placeholder="如 100"></div>
-            <div class="field" style="margin:0"><label>百分比 (%)</label><input type="number" step="any" id="pctVal" placeholder="如 10"></div>
-          </div>
-          <div style="margin-top:14px"><button class="btn primary" onclick="calcPct()">计算</button></div>
-          <div id="pctOut" style="margin-top:14px"></div>
-        </div>
-
         <!-- 加仓爆仓模拟器 -->
         <div class="card" style="grid-column:1/-1">
           <div class="section-title">加仓爆仓模拟器 <span style="color:var(--txt3);font-weight:400;text-transform:none">按买入金额（币值/名义）分批加仓 · 实时算数量/保证金/加权均价/爆仓价</span></div>
@@ -674,6 +652,28 @@
             <span id="simHint" class="help" style="margin:0">例：0.65 买 200U（币值）、0.702 再买 200U、0.97 补 200U → 数量 307.7/284.9/206.2，保证金各 10U，看每档逐仓爆仓价与全仓合并爆仓价</span>
           </div>
           <div id="simOut" style="margin-top:12px"></div>
+        </div>
+
+        <!-- 斐波那契回撤 -->
+        <div class="card">
+          <div class="section-title">斐波那契回撤 (Fibonacci Retracement)</div>
+          <div class="row">
+            <div class="field" style="margin:0"><label>高点 High</label><input type="number" step="any" id="fibHigh" placeholder="如 70000"></div>
+            <div class="field" style="margin:0"><label>低点 Low</label><input type="number" step="any" id="fibLow" placeholder="如 60000"></div>
+          </div>
+          <div style="margin-top:14px"><button class="btn primary" onclick="calcFib()">计算</button></div>
+          <div id="fibOut" style="margin-top:14px"></div>
+        </div>
+
+        <!-- 百分比计算 -->
+        <div class="card">
+          <div class="section-title">百分比计算器</div>
+          <div class="row">
+            <div class="field" style="margin:0"><label>基础价格</label><input type="number" step="any" id="pctBase" placeholder="如 100"></div>
+            <div class="field" style="margin:0"><label>百分比 (%)</label><input type="number" step="any" id="pctVal" placeholder="如 10"></div>
+          </div>
+          <div style="margin-top:14px"><button class="btn primary" onclick="calcPct()">计算</button></div>
+          <div id="pctOut" style="margin-top:14px"></div>
         </div>
 
       </div>
