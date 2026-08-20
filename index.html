@@ -1851,7 +1851,7 @@ function calcPct(){
     out.innerHTML=html;
   } else {
     let html='<table class="swing-tbl"><tr><th>比例</th><th class="num">金额</th><th class="num">上涨后</th><th class="num">下跌后</th></tr>';
-    for(let i=1;i<=30;i++){
+    for(let i=1;i<=100;i++){
       const amount=base*i/100;
       html+=`<tr><td style="font-family:var(--mono)">${i}%</td><td class="num" style="font-family:var(--mono);font-weight:600">${priceFmt(amount)}</td><td class="num" style="font-family:var(--mono);font-weight:600;color:var(--green)">${priceFmt(base+amount)}</td><td class="num" style="font-family:var(--mono);font-weight:600;color:var(--red)">${priceFmt(base-amount)}</td></tr>`;
     }
