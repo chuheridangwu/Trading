@@ -631,7 +631,7 @@
           <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
             <div class="field" style="margin:0"><label>账户总资金 U <span class="hint">可选</span></label><input type="number" step="any" id="simAccount" placeholder="如 10000"></div>
             <div class="field" style="margin:0"><label>杠杆 ×</label><input type="number" step="any" id="simLev" value="10"></div>
-            <div class="field" style="margin:0"><label>当前价 <span class="hint">可选 · 算距强平%</span></label><input type="number" step="any" id="simPrice" placeholder="如 1.2"></div>
+            <div class="field" style="margin:0"><label>当前价 <span class="hint">可选 · 算实时盈亏/距强平%</span></label><input type="number" step="any" id="simPrice" placeholder="如 1.2"></div>
             <div class="field" style="margin:0"><label>方向 / 保证金模式</label>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
                 <div class="margin-mode-group" id="simDirG">
@@ -1940,6 +1940,8 @@ function computeSim(){
   const bankCross=long?avg-pool/totQty:avg+pool/totQty;
   const noLiq=liqCross<=0; // 仅做多：担保远大于仓位时强平价为负 → 不会强平（币安显示 -）。空单强平价恒在均价上方，永远有真实数值
   const acRatio=ac>0?totMargin/ac*100:0;
+  const pnl=cur>0?valid.reduce((s,t,i)=>s+(long?cur-t.price:t.price-cur)*rows[i],0):null; // 实时盈亏：多(现价-买入)×数量、空(买入-现价)×数量
+  const pnlPct=pnl!=null&&totVal>0?pnl/totVal*100:null; // 盈亏率 = 盈亏 ÷ 总买入币值
   const warns=[],goods=[];
 
   if(ac===0)warns.push('未填「账户总资金」——全仓强平暂按占用保证金计算（更保守）。填上钱包余额才是币安全仓真实强平价');
@@ -1961,12 +1963,20 @@ function computeSim(){
     stat('总占用保证金',+totMargin.toFixed(2)+'U','')+
     stat('维持保证金率',(mmr*100).toFixed(2)+'%','')+
     stat('全仓强平价',noLiq?'不会强平':priceFmt(liqCross)+(ac>0?'':'*'),noLiq?'green':'')+
+    (pnl!=null?stat('当前盈亏',(pnl>=0?'+':'')+fmt(pnl)+'U',pnl>=0?'green':'red')+'':'')+
+    (pnlPct!=null?stat('盈亏率',(pnlPct>=0?'+':'')+pnlPct.toFixed(2)+'%',pnlPct>=0?'green':'red')+'':'')+
     '</div>';
 
-  html+=`<table class="swing-tbl"><tr><th>档位</th><th class="num">买入价</th><th class="num">买入金额U</th><th class="num">保证金U</th><th class="num">数量</th><th class="num">逐仓强平价</th></tr>`;
+  html+=`<table class="swing-tbl"><tr><th>档位</th><th class="num">买入价</th><th class="num">买入金额U</th><th class="num">保证金U</th><th class="num">数量</th>${pnl!=null?'<th class="num">当前盈亏</th>':''}<th class="num">逐仓强平价</th></tr>`;
   valid.forEach((t,i)=>{
     const dirPct=((liqIso[i]/t.price)-1)*100*(long?1:-1);
-    html+=`<tr><td>#${i+1}${i>0?' · 补仓':''}</td><td class="num" style="font-family:var(--mono)">${t.price}</td><td class="num" style="font-family:var(--mono)">${+t.amt.toFixed(2)}</td><td class="num" style="font-family:var(--mono)">${+((t.amt/L).toFixed(4))}</td><td class="num" style="font-family:var(--mono);font-weight:600">${+rows[i].toFixed(4)}</td><td class="num" style="font-family:var(--mono);color:var(--red)">${priceFmt(liqIso[i])} <span style="color:var(--txt3)">(${dirPct<0?'-':''}${Math.abs(dirPct).toFixed(1)}%)</span></td></tr>`;
+    let lotTd='';
+    if(pnl!=null){
+      const lotPnl=(long?cur-t.price:t.price-cur)*rows[i];
+      const col=lotPnl>=0?'var(--green)':'var(--red)';
+      lotTd=`<td class="num" style="font-family:var(--mono);color:${col}">${lotPnl>=0?'+':''}${lotPnl.toFixed(2)}U</td>`;
+    }
+    html+=`<tr><td>#${i+1}${i>0?' · 补仓':''}</td><td class="num" style="font-family:var(--mono)">${t.price}</td><td class="num" style="font-family:var(--mono)">${+t.amt.toFixed(2)}</td><td class="num" style="font-family:var(--mono)">${+((t.amt/L).toFixed(4))}</td><td class="num" style="font-family:var(--mono);font-weight:600">${+rows[i].toFixed(4)}</td>${lotTd}<td class="num" style="font-family:var(--mono);color:var(--red)">${priceFmt(liqIso[i])} <span style="color:var(--txt3)">(${dirPct<0?'-':''}${Math.abs(dirPct).toFixed(1)}%)</span></td></tr>`;
   });
   html+='</table>';
 
